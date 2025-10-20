@@ -9,6 +9,7 @@ dependencies = [
     "protobuf>=6.33.0",
     "pyannote-audio>=4.0.1",
     "pydub>=0.25.1",
+    "python-dotenv>=1.1.1",
     "sentencepiece>=0.2.1",
     "torch>=2.9.0",
     "transformers>=4.57.1",
