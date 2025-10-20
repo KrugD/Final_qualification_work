@@ -1,0 +1,15 @@
+[project]
+name = "final-qualification-work"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.3.3",
+    "protobuf>=6.33.0",
+    "pyannote-audio>=4.0.1",
+    "pydub>=0.25.1",
+    "sentencepiece>=0.2.1",
+    "torch>=2.9.0",
+    "transformers>=4.57.1",
+]
