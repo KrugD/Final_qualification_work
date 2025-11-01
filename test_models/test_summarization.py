@@ -10,6 +10,65 @@ from utils.config import ModelConfig, get_device
 from utils.models import load_summarization_model
 
 
+def save_summarization_to_txt(dataframe, output_txt_path):
+    """Save summarization results to text file.
+    
+    Args:
+        dataframe: DataFrame with summarization results
+        output_txt_path: Path for output text file
+    """
+    with open(output_txt_path, 'w', encoding='utf-8') as file:
+        file.write("TEXT SUMMARIZATION RESULTS\n")
+        file.write("=" * 50 + "\n\n")
+        
+        for _, row in dataframe.iterrows():
+            file.write(f"Speaker: {row['speaker']}\n")
+            file.write(f"Original Text Length: {row['original_text_length']} chars\n")
+            file.write(f"Summary Length: {row['summary_length']} chars\n")
+            file.write(f"Compression Ratio: {row['compression_ratio']:.2f}\n")
+            file.write(f"Summary: {row['summary']}\n")
+            file.write("=" * 50 + "\n\n")
+
+
+def parse_correction_from_txt(txt_file_path):
+    """Parse correction results from text file.
+    
+    Args:
+        txt_file_path: Path to correction text file
+        
+    Returns:
+        DataFrame: Parsed correction data
+    """
+    data = []
+    
+    with open(txt_file_path, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+        
+        current_speaker = None
+        current_corrected_text = None
+        
+        for line in lines:
+            line = line.strip()
+            
+            if line.startswith("Speaker:"):
+                current_speaker = line.replace("Speaker:", "").strip()
+            elif line.startswith("Corrected:"):
+                current_corrected_text = line.replace("Corrected:", "").strip()
+                
+                # When we have speaker and corrected text, add to results
+                if current_speaker and current_corrected_text:
+                    data.append({
+                        "speaker": current_speaker,
+                        "corrected_text": current_corrected_text
+                    })
+                    
+                    # Reset for next segment
+                    current_speaker = None
+                    current_corrected_text = None
+    
+    return pd.DataFrame(data)
+
+
 def summarize_text(input_text, summarization_model, summarization_tokenizer):
     """Summarize text using the summarization model.
     
@@ -44,31 +103,34 @@ def summarize_text(input_text, summarization_model, summarization_tokenizer):
         return input_text[:200] + "...", False
 
 
-def test_summarization(input_csv_path="correction_results.csv", output_csv_path="summarization_results.csv"):
+def test_summarization(input_txt_path, output_txt_path):
     """Test text summarization model on corrected texts.
     
     Args:
-        input_csv_path: Path to input CSV with corrected texts
-        output_csv_path: Path for output CSV with summaries
+        input_txt_path: Path to input text file with corrected texts
+        output_txt_path: Path for output text file with summaries
         
     Returns:
-        tuple: (DataFrame with summaries, dictionary with metrics)
+        DataFrame: DataFrame with summaries
     """
     start_time = time.time()
     
     print("Loading summarization model...")
     summarization_model, summarization_tokenizer = load_summarization_model()
     
-    input_dataframe = pd.read_csv(input_csv_path, encoding="utf-8-sig")
+    # Parse correction data from text file
+    input_dataframe = parse_correction_from_txt(input_txt_path)
     
+    if input_dataframe.empty:
+        print("No correction data found to summarize")
+        return pd.DataFrame()
+    
+    # Group texts by speaker
     speaker_texts = input_dataframe.groupby("speaker")["corrected_text"].apply(" ".join).reset_index()
     
     print(f"Summarizing texts for {len(speaker_texts)} speakers...")
     
     summaries = []
-    successful_summaries = 0
-    processing_times = []
-    compression_ratios = []
     
     for _, row in speaker_texts.iterrows():
         speaker = row["speaker"]
@@ -80,20 +142,13 @@ def test_summarization(input_csv_path="correction_results.csv", output_csv_path=
         if len(original_text) > ModelConfig.MAX_SUMMARY_INPUT_LENGTH:
             processed_text = original_text[:ModelConfig.MAX_SUMMARY_INPUT_LENGTH] + "..."
         
-        segment_start_time = time.time()
         summary_text, success_status = summarize_text(
             processed_text, 
             summarization_model, 
             summarization_tokenizer
         )
-        segment_processing_time = time.time() - segment_start_time
-        processing_times.append(segment_processing_time)
         
-        if success_status:
-            successful_summaries += 1
-            
         compression_ratio = len(summary_text) / len(original_text) if len(original_text) > 0 else 0
-        compression_ratios.append(compression_ratio)
         
         summaries.append({
             "speaker": speaker,
@@ -107,61 +162,42 @@ def test_summarization(input_csv_path="correction_results.csv", output_csv_path=
         print(f"Summary length: {len(summary_text)}")
         print(f"Compression ratio: {compression_ratio:.2f}")
         print(f"Summary: {summary_text}")
-        print(f"Processing time: {segment_processing_time:.2f} seconds")
         print("---")
     
     summary_dataframe = pd.DataFrame(summaries)
-    summary_dataframe.to_csv(output_csv_path, index=False, encoding="utf-8-sig")
+    
+    # Save to text file
+    save_summarization_to_txt(summary_dataframe, output_txt_path)
     
     total_execution_time = time.time() - start_time
-    metrics = {
-        "execution_time": float(total_execution_time),
-        "speakers_count": int(len(speaker_texts)),
-        "successful_summaries": int(successful_summaries),
-        "success_rate": float(successful_summaries / len(speaker_texts) if len(speaker_texts) > 0 else 0),
-        "avg_processing_time_per_speaker": float(
-            sum(processing_times) / len(processing_times) if processing_times else 0
-        ),
-        "avg_compression_ratio": float(
-            sum(compression_ratios) / len(compression_ratios) if compression_ratios else 0
-        ),
-        "total_characters_processed": int(sum(row["original_text_length"] for row in summaries))
-    }
-    
     print(f"Summarization completed in {total_execution_time:.2f} seconds")
-    print(f"Success rate: {metrics['success_rate']:.2%}")
-    print(f"Average compression ratio: {metrics['avg_compression_ratio']:.2f}")
-    print(f"Average time per speaker: {metrics['avg_processing_time_per_speaker']:.2f} seconds")
     
-    return summary_dataframe, metrics
+    return summary_dataframe
 
 
-def create_meeting_minutes(summary_csv_path="summarization_results.csv", output_file_path="meeting_minutes.txt"):
+def create_meeting_minutes(summary_txt_path, output_file_path):
     """Create meeting minutes from speaker summaries.
     
     Args:
-        summary_csv_path: Path to CSV with speaker summaries
+        summary_txt_path: Path to text file with speaker summaries
         output_file_path: Path for output meeting minutes file
     """
-    summary_dataframe = pd.read_csv(summary_csv_path, encoding="utf-8-sig")
+    # Parse summary data
+    summary_dataframe = parse_correction_from_txt(summary_txt_path)  # Reusing parser since format is similar
     
-    with open(output_file_path, "w", encoding="utf-8") as output_file:
-        output_file.write("ПРОТОКОЛ ВСТРЕЧИ\n")
-        output_file.write("=" * 50 + "\n\n")
+    with open(output_file_path, 'w', encoding='utf-8') as file:
+        file.write("ПРОТОКОЛ ВСТРЕЧИ\n")
+        file.write("=" * 50 + "\n\n")
         
         for _, row in summary_dataframe.iterrows():
-            output_file.write(f"СПИКЕР: {row['speaker']}\n")
-            output_file.write(f"КЛЮЧЕВЫЕ ТЕЗИСЫ:\n")
-            output_file.write(f"{row['summary']}\n")
-            output_file.write("-" * 50 + "\n\n")
+            file.write(f"СПИКЕР: {row['speaker']}\n")
+            file.write(f"КЛЮЧЕВЫЕ ТЕЗИСЫ:\n")
+            file.write(f"{row['corrected_text']}\n")
+            file.write("-" * 50 + "\n\n")
     
     print(f"Meeting minutes saved to {output_file_path}")
 
 
 if __name__ == "__main__":
-    result_dataframe, performance_metrics = test_summarization(
-        "correction_results.csv", 
-        "test_summarization_results.csv"
-    )
-    
-    create_meeting_minutes("test_summarization_results.csv", "test_meeting_minutes.txt")
+    result_dataframe = test_summarization("correction.txt", "test_summarization.txt")
+    create_meeting_minutes("test_summarization.txt", "test_meeting_minutes.txt")

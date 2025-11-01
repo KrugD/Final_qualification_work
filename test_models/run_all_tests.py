@@ -1,7 +1,7 @@
 import json
 import os
 import sys
-import numpy as np
+from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -10,41 +10,35 @@ from test_asr import perform_speech_recognition
 from test_correction import test_correction
 from test_summarization import test_summarization, create_meeting_minutes
 
-def convert_metrics_for_json(metrics):
-    """Convert metrics with numpy/pandas types to JSON-serializable types.
-    
-    Args:
-        metrics: Dictionary with metrics
-        
-    Returns:
-        dict: JSON-serializable dictionary
-    """
-    def convert_value(value):
-        if isinstance(value, (np.integer, np.int64)):
-            return int(value)
-        elif isinstance(value, (np.floating, np.float64)):
-            return float(value)
-        elif isinstance(value, np.ndarray):
-            return value.tolist()
-        else:
-            return value
-    
-    if isinstance(metrics, dict):
-        return {key: convert_metrics_for_json(value) for key, value in metrics.items()}
-    else:
-        return convert_value(metrics)
 
-def run_complete_pipeline(audio_file_path, output_prefix="test"):
-    """Run complete pipeline with metrics collection.
+def ensure_directory(directory_path):
+    """Create directory if it doesn't exist."""
+    Path(directory_path).mkdir(parents=True, exist_ok=True)
+
+
+def run_complete_pipeline(audio_file_path, base_output_dir="pipeline_output"):
+    """Run complete pipeline with organized output structure.
     
     Args:
         audio_file_path: Path to input audio file
-        output_prefix: Prefix for output files
+        base_output_dir: Base directory for all outputs
         
     Returns:
-        dict: Dictionary with all collected metrics
+        bool: True if pipeline completed successfully
     """
-    all_metrics = {}
+    # Get audio file name without extension
+    audio_filename = Path(audio_file_path).stem
+    
+    # Create output directories
+    dirs = {
+        'diarization': os.path.join(base_output_dir, "diarization"),
+        'asr': os.path.join(base_output_dir, "asr"), 
+        'correction': os.path.join(base_output_dir, "correction"),
+        'summarization': os.path.join(base_output_dir, "summarization")
+    }
+    
+    for dir_path in dirs.values():
+        ensure_directory(dir_path)
     
     print("=" * 60)
     print("STARTING COMPLETE PIPELINE TEST")
@@ -52,95 +46,77 @@ def run_complete_pipeline(audio_file_path, output_prefix="test"):
     
     # 1. Diarization
     print("\n1. DIARIZATION STAGE")
-    diarization_output_path = f"{output_prefix}_diarization.csv"
-    diarization_dataframe, diarization_metrics = perform_diarization(
-        audio_file_path, 
-        diarization_output_path
-    )
-    all_metrics["diarization"] = diarization_metrics
+    diarization_output_path = os.path.join(dirs['diarization'], f"{audio_filename}_diarization.txt")
+    diarization_dataframe = perform_diarization(audio_file_path, diarization_output_path)
     
     if diarization_dataframe.empty:
         print("Diarization failed - stopping pipeline")
-        return all_metrics
+        return False
     
     # 2. Speech Recognition
     print("\n2. SPEECH RECOGNITION STAGE")
-    asr_output_path = f"{output_prefix}_asr.csv"
-    asr_dataframe, asr_metrics = perform_speech_recognition(
+    asr_output_path = os.path.join(dirs['asr'], f"{audio_filename}_asr.txt")
+    asr_dataframe = perform_speech_recognition(
         audio_file_path,
         diarization_output_path,
         asr_output_path
     )
-    all_metrics["asr"] = asr_metrics
     
     if asr_dataframe.empty:
         print("Speech recognition failed - stopping pipeline")
-        return all_metrics
+        return False
     
     # 3. Correction
     print("\n3. CORRECTION STAGE")
-    correction_output_path = f"{output_prefix}_correction.csv"
-    correction_dataframe, correction_metrics = test_correction(
-        asr_output_path, 
-        correction_output_path
-    )
-    all_metrics["correction"] = correction_metrics
+    correction_output_path = os.path.join(dirs['correction'], f"{audio_filename}_correction.txt")
+    correction_dataframe = test_correction(asr_output_path, correction_output_path)
+    
+    if correction_dataframe.empty:
+        print("Correction failed - stopping pipeline")
+        return False
     
     # 4. Summarization
     print("\n4. SUMMARIZATION STAGE")
-    summarization_output_path = f"{output_prefix}_summarization.csv"
-    summarization_dataframe, summarization_metrics = test_summarization(
-        correction_output_path, 
-        summarization_output_path
-    )
-    all_metrics["summarization"] = summarization_metrics
-    
-    # 5. Create Meeting Minutes
-    minutes_output_path = f"{output_prefix}_meeting_minutes.txt"
-    create_meeting_minutes(summarization_output_path, minutes_output_path)
-    
-    # Save all metrics to JSON
-    metrics_output_path = f"{output_prefix}_metrics.json"
-    
-    # Convert metrics to JSON-serializable format
-    json_metrics = convert_metrics_for_json(all_metrics)
-    
-    with open(metrics_output_path, "w", encoding="utf-8") as metrics_file:
-        json.dump(json_metrics, metrics_file, ensure_ascii=False, indent=2)
+    summarization_output_path = os.path.join(dirs['summarization'], f"{audio_filename}_summarization.txt")
+    summarization_dataframe = test_summarization(correction_output_path, summarization_output_path)
     
     print("\n" + "=" * 60)
     print("PIPELINE COMPLETED SUCCESSFULLY")
     print("=" * 60)
     
-    # Counting total execution time
-    total_pipeline_time = (
-        all_metrics["diarization"]["execution_time"] + 
-        all_metrics["asr"]["execution_time"] + 
-        all_metrics["correction"]["execution_time"] + 
-        all_metrics["summarization"]["execution_time"]
-    )
+    print(f"Output files created:")
+    print(f"- Diarization: {diarization_output_path}")
+    print(f"- ASR: {asr_output_path}")
+    print(f"- Correction: {correction_output_path}")
+    print(f"- Summarization: {summarization_output_path}")
     
-    print(f"Total pipeline execution time: {total_pipeline_time:.2f} seconds")
-    print(f"Final metrics saved to: {metrics_output_path}")
-    
-    # Output key metrics
-    print("\nKEY METRICS:")
-    print(f"- Speakers identified: {all_metrics['diarization']['speakers_count']}")
-    print(f"- Speech segments: {all_metrics['asr']['segments_with_speech']}")
-    print(f"- Total words: {all_metrics['asr']['total_words']}")
-    print(f"- Correction success rate: {all_metrics['correction']['success_rate']:.2%}")
-    print(f"- Summarization success rate: {all_metrics['summarization']['success_rate']:.2%}")
-    
-    return all_metrics
+    return True
 
 
 if __name__ == "__main__":
-
-    input_audio_file = "audio_test/1.wav"
+    # Process all audio files in audio_test directory
+    audio_test_dir = "audio_test"
+    base_output_dir = "pipeline_output"
     
-    if not os.path.exists(input_audio_file):
-        print(f"Error: Audio file {input_audio_file} not found!")
-        print("Please make sure the file exists in the audio_test directory.")
-    else:
-        print(f"Processing audio file: {input_audio_file}")
-        pipeline_metrics = run_complete_pipeline(input_audio_file, "full_test")
+    if not os.path.exists(audio_test_dir):
+        print(f"Error: Audio test directory {audio_test_dir} not found!")
+        sys.exit(1)
+    
+    audio_files = [f for f in os.listdir(audio_test_dir) if f.endswith('.wav')]
+    
+    if not audio_files:
+        print(f"No audio files found in {audio_test_dir}")
+        sys.exit(1)
+    
+    print(f"Found {len(audio_files)} audio files to process")
+    
+    for audio_file in audio_files:
+        input_audio_file = os.path.join(audio_test_dir, audio_file)
+        print(f"\nProcessing audio file: {input_audio_file}")
+        
+        success = run_complete_pipeline(input_audio_file, base_output_dir)
+        
+        if success:
+            print(f"✓ Successfully processed {audio_file}")
+        else:
+            print(f"✗ Failed to process {audio_file}")
