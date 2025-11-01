@@ -8,6 +8,77 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.models import load_correction_model
 
 
+def save_correction_to_txt(dataframe, output_txt_path):
+    """Save correction results to text file.
+    
+    Args:
+        dataframe: DataFrame with correction results
+        output_txt_path: Path for output text file
+    """
+    with open(output_txt_path, 'w', encoding='utf-8') as file:
+        file.write("TEXT CORRECTION RESULTS\n")
+        file.write("=" * 50 + "\n\n")
+        
+        for _, row in dataframe.iterrows():
+            file.write(f"Speaker: {row['speaker']}\n")
+            file.write(f"Start Time: {row['start_time']:.2f}s\n")
+            file.write(f"End Time: {row['end_time']:.2f}s\n")
+            file.write(f"Original: {row['text']}\n")
+            file.write(f"Corrected: {row['corrected_text']}\n")
+            file.write("-" * 50 + "\n")
+
+
+def parse_asr_from_txt(txt_file_path):
+    """Parse ASR results from text file.
+    
+    Args:
+        txt_file_path: Path to ASR text file
+        
+    Returns:
+        DataFrame: Parsed ASR data
+    """
+    data = []
+    
+    with open(txt_file_path, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+        
+        current_speaker = None
+        current_start = None
+        current_end = None
+        current_text = None
+        
+        for line in lines:
+            line = line.strip()
+            
+            if line.startswith("Speaker:"):
+                current_speaker = line.replace("Speaker:", "").strip()
+            elif line.startswith("Start Time:"):
+                start_str = line.replace("Start Time:", "").replace("s", "").strip()
+                current_start = float(start_str)
+            elif line.startswith("End Time:"):
+                end_str = line.replace("End Time:", "").replace("s", "").strip()
+                current_end = float(end_str)
+            elif line.startswith("Text:"):
+                current_text = line.replace("Text:", "").strip()
+                
+                # When we have all data, add to results
+                if current_speaker and current_start is not None and current_end is not None and current_text:
+                    data.append({
+                        "speaker": current_speaker,
+                        "start_time": current_start,
+                        "end_time": current_end,
+                        "text": current_text
+                    })
+                    
+                    # Reset for next segment
+                    current_speaker = None
+                    current_start = None
+                    current_end = None
+                    current_text = None
+    
+    return pd.DataFrame(data)
+
+
 def correct_text(input_text, correction_model, correction_tokenizer):
     """Correct text using the correction model.
     
@@ -20,6 +91,7 @@ def correct_text(input_text, correction_model, correction_tokenizer):
         tuple: (corrected_text, success_status)
     """
     try:
+        # For Russian text correction
         encodings = correction_tokenizer(input_text, return_tensors="pt")
         generated_tokens = correction_model.generate(
             **encodings, 
@@ -35,74 +107,58 @@ def correct_text(input_text, correction_model, correction_tokenizer):
         return input_text, False
 
 
-def test_correction(input_csv_path="diarization_results.csv", output_csv_path="correction_results.csv"):
-    """Test text correction model on diarization results.
+def test_correction(input_txt_path, output_txt_path):
+    """Test text correction model on ASR results.
     
     Args:
-        input_csv_path: Path to input CSV with diarization results
-        output_csv_path: Path for output CSV with corrected texts
+        input_txt_path: Path to input text file with ASR results
+        output_txt_path: Path for output text file with corrected texts
         
     Returns:
-        tuple: (DataFrame with corrected texts, dictionary with metrics)
+        DataFrame: DataFrame with corrected texts
     """
     start_time = time.time()
     
     print("Loading correction model...")
     correction_model, correction_tokenizer = load_correction_model()
     
-    input_dataframe = pd.read_csv(input_csv_path, encoding="utf-8-sig")
+    # Parse ASR data from text file
+    input_dataframe = parse_asr_from_txt(input_txt_path)
+    
+    if input_dataframe.empty:
+        print("No ASR data found to correct")
+        return pd.DataFrame()
     
     print(f"Correcting {len(input_dataframe)} segments...")
     
     corrected_texts = []
-    successful_corrections = 0
-    processing_times = []
     
-    for index, text in enumerate(input_dataframe["text"]):
+    for index, row in input_dataframe.iterrows():
         print(f"Correcting segment {index + 1}/{len(input_dataframe)}...")
         
-        segment_start_time = time.time()
+        original_text = row["text"]
         corrected_text, success_status = correct_text(
-            text, 
+            original_text, 
             correction_model, 
             correction_tokenizer
         )
-        segment_processing_time = time.time() - segment_start_time
-        processing_times.append(segment_processing_time)
         
         corrected_texts.append(corrected_text)
-        if success_status:
-            successful_corrections += 1
         
-        print(f"Original: {text}")
+        print(f"Original: {original_text}")
         print(f"Corrected: {corrected_text}")
-        print(f"Processing time: {segment_processing_time:.2f} seconds")
         print("---")
     
     input_dataframe["corrected_text"] = corrected_texts
-    input_dataframe.to_csv(output_csv_path, index=False, encoding="utf-8-sig")
+    
+    # Save to text file
+    save_correction_to_txt(input_dataframe, output_txt_path)
     
     total_execution_time = time.time() - start_time
-    metrics = {
-        "execution_time": float(total_execution_time),
-        "segments_count": int(len(input_dataframe)),
-        "successful_corrections": int(successful_corrections),
-        "success_rate": float(successful_corrections / len(input_dataframe) if len(input_dataframe) > 0 else 0),
-        "avg_processing_time_per_segment": float(
-            sum(processing_times) / len(processing_times) if processing_times else 0
-        ),
-        "total_characters_processed": int(sum(len(text) for text in input_dataframe["text"]))
-    }
-    
     print(f"Correction completed in {total_execution_time:.2f} seconds")
-    print(f"Success rate: {metrics['success_rate']:.2%}")
-    print(f"Average time per segment: {metrics['avg_processing_time_per_segment']:.2f} seconds")
     
-    return input_dataframe, metrics
+    return input_dataframe
 
 
 if __name__ == "__main__":
-    result_dataframe, performance_metrics = test_correction(
-        "diarization_results.csv", 
-        "test_correction_results.csv"
-    )
+    result_dataframe = test_correction("asr.txt", "test_correction.txt")

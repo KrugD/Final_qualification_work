@@ -2,7 +2,6 @@ import time
 import sys
 import os
 import pandas as pd
-from pyannote.audio import Pipeline
 from pydub import AudioSegment
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -11,15 +10,34 @@ from utils.config import ModelConfig
 from utils.models import load_diarization_model
 
 
-def perform_diarization(audio_file_path, output_csv_path="diarization_results.csv"):
+def save_diarization_to_txt(dataframe, output_txt_path):
+    """Save diarization results to text file.
+    
+    Args:
+        dataframe: DataFrame with diarization results
+        output_txt_path: Path for output text file
+    """
+    with open(output_txt_path, 'w', encoding='utf-8') as file:
+        file.write("SPEAKER DIARIZATION RESULTS\n")
+        file.write("=" * 40 + "\n\n")
+        
+        for _, row in dataframe.iterrows():
+            file.write(f"Speaker: {row['speaker']}\n")
+            file.write(f"Start: {row['start_time']:.2f}s\n")
+            file.write(f"End: {row['end_time']:.2f}s\n")
+            file.write(f"Duration: {row['duration']:.2f}s\n")
+            file.write("-" * 30 + "\n")
+
+
+def perform_diarization(audio_file_path, output_txt_path):
     """Perform speaker diarization on audio file.
     
     Args:
         audio_file_path: Path to input audio file
-        output_csv_path: Path for output CSV file
+        output_txt_path: Path for output text file
         
     Returns:
-        tuple: (DataFrame with diarization results, dictionary with metrics)
+        DataFrame: DataFrame with diarization results
     """
     start_time = time.time()
     
@@ -45,29 +63,24 @@ def perform_diarization(audio_file_path, output_csv_path="diarization_results.cs
         print(f"{speaker} [{turn.start:.1f}s - {turn.end:.1f}s]")
     
     results_dataframe = pd.DataFrame(segments)
-    execution_time = time.time() - start_time
     
     if not results_dataframe.empty:
         results_dataframe = results_dataframe.sort_values("start_time").reset_index(drop=True)
-        results_dataframe.to_csv(output_csv_path, index=False, encoding="utf-8-sig")
         
-        metrics = {
-            "execution_time": float(execution_time),
-            "segments_count": int(len(results_dataframe)),
-            "speakers_count": int(results_dataframe["speaker"].nunique()),
-            "audio_duration": float(results_dataframe["end_time"].max())
-        }
+        # Save to text file
+        save_diarization_to_txt(results_dataframe, output_txt_path)
         
+        execution_time = time.time() - start_time
         print(f"Diarization completed in {execution_time:.2f} seconds")
-        print(f"Segments found: {metrics['segments_count']}")
-        print(f"Unique speakers: {metrics['speakers_count']}")
+        print(f"Segments found: {len(results_dataframe)}")
+        print(f"Unique speakers: {results_dataframe['speaker'].nunique()}")
         
-        return results_dataframe, metrics
+        return results_dataframe
     
     print("No speech segments found")
-    return pd.DataFrame(), {"execution_time": execution_time, "segments_count": 0}
+    return pd.DataFrame()
 
 
 if __name__ == "__main__":
     audio_file = "1.wav"
-    dataframe, performance_metrics = perform_diarization(audio_file, "test_diarization_results.csv")
+    dataframe = perform_diarization(audio_file, "test_diarization.txt")
