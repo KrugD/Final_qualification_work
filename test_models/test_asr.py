@@ -142,7 +142,7 @@ def transcribe_audio_segments(segments, asr_pipeline):
             segment["audio_segment"].export(temp_file, format="wav")
             
             # Transcribe using ASR
-            asr_result = asr_pipeline(temp_file)
+            asr_result = asr_pipeline(temp_file, return_timestamps=True)
             text = asr_result["text"].strip()
             
             if text and text not in ["", ".", "..."]:
