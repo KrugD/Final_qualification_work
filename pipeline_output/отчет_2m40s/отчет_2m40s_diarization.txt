@@ -1,0 +1,78 @@
+SPEAKER DIARIZATION RESULTS
+========================================
+
+Speaker: SPEAKER_00
+Start: 0.66s
+End: 1.40s
+Duration: 0.74s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1.87s
+End: 7.73s
+Duration: 5.86s
+------------------------------
+Speaker: SPEAKER_00
+Start: 8.40s
+End: 14.90s
+Duration: 6.50s
+------------------------------
+Speaker: SPEAKER_00
+Start: 15.72s
+End: 20.13s
+Duration: 4.40s
+------------------------------
+Speaker: SPEAKER_00
+Start: 20.58s
+End: 47.43s
+Duration: 26.85s
+------------------------------
+Speaker: SPEAKER_00
+Start: 48.51s
+End: 102.07s
+Duration: 53.56s
+------------------------------
+Speaker: SPEAKER_00
+Start: 102.73s
+End: 105.75s
+Duration: 3.02s
+------------------------------
+Speaker: SPEAKER_00
+Start: 105.99s
+End: 108.08s
+Duration: 2.09s
+------------------------------
+Speaker: SPEAKER_00
+Start: 108.50s
+End: 112.64s
+Duration: 4.13s
+------------------------------
+Speaker: SPEAKER_00
+Start: 114.07s
+End: 117.18s
+Duration: 3.11s
+------------------------------
+Speaker: SPEAKER_00
+Start: 118.48s
+End: 121.50s
+Duration: 3.02s
+------------------------------
+Speaker: SPEAKER_00
+Start: 122.98s
+End: 144.04s
+Duration: 21.06s
+------------------------------
+Speaker: SPEAKER_00
+Start: 144.87s
+End: 150.62s
+Duration: 5.75s
+------------------------------
+Speaker: SPEAKER_00
+Start: 151.05s
+End: 152.95s
+Duration: 1.91s
+------------------------------
+Speaker: SPEAKER_00
+Start: 154.20s
+End: 159.45s
+Duration: 5.25s
+------------------------------

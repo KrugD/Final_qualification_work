@@ -9,33 +9,34 @@ from utils.models import load_correction_model
 
 
 def save_correction_to_txt(dataframe, output_txt_path):
-    """Save correction results to text file.
+    """Save corrected summary results to text file.
     
     Args:
-        dataframe: DataFrame with correction results
+        dataframe: DataFrame with corrected summary results
         output_txt_path: Path for output text file
     """
     with open(output_txt_path, 'w', encoding='utf-8') as file:
-        file.write("TEXT CORRECTION RESULTS\n")
-        file.write("=" * 50 + "\n\n")
+        file.write("CORRECTED SUMMARIZATION RESULTS\n")
+        file.write("=" * 60 + "\n\n")
         
         for _, row in dataframe.iterrows():
             file.write(f"Speaker: {row['speaker']}\n")
-            file.write(f"Start Time: {row['start_time']:.2f}s\n")
-            file.write(f"End Time: {row['end_time']:.2f}s\n")
-            file.write(f"Original: {row['text']}\n")
-            file.write(f"Corrected: {row['corrected_text']}\n")
-            file.write("-" * 50 + "\n")
+            file.write(f"Original Summary Length: {row['summary_length']} chars\n")
+            file.write(f"Corrected Summary Length: {len(row['corrected_summary'])} chars\n")
+            file.write(f"Compression Ratio: {row['compression_ratio']:.2f}\n")
+            file.write(f"Original Summary: {row['summary']}\n")
+            file.write(f"Corrected Summary: {row['corrected_summary']}\n")
+            file.write("=" * 60 + "\n\n")
 
 
-def parse_asr_from_txt(txt_file_path):
-    """Parse ASR results from text file.
+def parse_summarization_from_txt(txt_file_path):
+    """Parse summarization results from text file.
     
     Args:
-        txt_file_path: Path to ASR text file
+        txt_file_path: Path to summarization text file
         
     Returns:
-        DataFrame: Parsed ASR data
+        DataFrame: Parsed summarization data
     """
     data = []
     
@@ -43,38 +44,58 @@ def parse_asr_from_txt(txt_file_path):
         lines = file.readlines()
         
         current_speaker = None
-        current_start = None
-        current_end = None
-        current_text = None
+        current_summary = None
+        current_original_length = None
+        current_summary_length = None
+        current_compression_ratio = None
+        capture_summary = False
         
         for line in lines:
             line = line.strip()
             
             if line.startswith("Speaker:"):
                 current_speaker = line.replace("Speaker:", "").strip()
-            elif line.startswith("Start Time:"):
-                start_str = line.replace("Start Time:", "").replace("s", "").strip()
-                current_start = float(start_str)
-            elif line.startswith("End Time:"):
-                end_str = line.replace("End Time:", "").replace("s", "").strip()
-                current_end = float(end_str)
-            elif line.startswith("Text:"):
-                current_text = line.replace("Text:", "").strip()
-                
-                # When we have all data, add to results
-                if current_speaker and current_start is not None and current_end is not None and current_text:
-                    data.append({
-                        "speaker": current_speaker,
-                        "start_time": current_start,
-                        "end_time": current_end,
-                        "text": current_text
-                    })
+            elif line.startswith("Original Text Length:"):
+                length_str = line.replace("Original Text Length:", "").replace("chars", "").strip()
+                current_original_length = int(length_str)
+            elif line.startswith("Summary Length:"):
+                length_str = line.replace("Summary Length:", "").replace("chars", "").strip()
+                current_summary_length = int(length_str)
+            elif line.startswith("Compression Ratio:"):
+                ratio_str = line.replace("Compression Ratio:", "").strip()
+                current_compression_ratio = float(ratio_str)
+            elif line.startswith("Summary:"):
+                # We begin capturing the summarization text
+                current_summary = line.replace("Summary:", "").strip()
+                capture_summary = True
+            elif capture_summary:
+                # If this is a continuation of the summary text (not the next section)
+                if line and not line.startswith("=") and not line.startswith("Speaker:"):
+                    current_summary += " " + line
+                else:
+                    # Completed the summation capture
+                    capture_summary = False
                     
-                    # Reset for next segment
-                    current_speaker = None
-                    current_start = None
-                    current_end = None
-                    current_text = None
+                    # When all the data was collected
+                    if current_speaker and current_summary:
+                        data.append({
+                            "speaker": current_speaker,
+                            "original_text_length": current_original_length,
+                            "summary_length": current_summary_length,
+                            "compression_ratio": current_compression_ratio,
+                            "summary": current_summary.strip()
+                        })
+                        
+                        # Reset for next segment
+                        current_speaker = None
+                        current_summary = None
+                        current_original_length = None
+                        current_summary_length = None
+                        current_compression_ratio = None
+                    
+                    # If you meet a new speaker, we start over.
+                    if line.startswith("Speaker:"):
+                        current_speaker = line.replace("Speaker:", "").strip()
     
     return pd.DataFrame(data)
 
@@ -108,57 +129,57 @@ def correct_text(input_text, correction_model, correction_tokenizer):
 
 
 def test_correction(input_txt_path, output_txt_path):
-    """Test text correction model on ASR results.
+    """Test text correction model on summarization results.
     
     Args:
-        input_txt_path: Path to input text file with ASR results
-        output_txt_path: Path for output text file with corrected texts
+        input_txt_path: Path to input text file with summarization results
+        output_txt_path: Path for output text file with corrected summaries
         
     Returns:
-        DataFrame: DataFrame with corrected texts
+        DataFrame: DataFrame with corrected summaries
     """
     start_time = time.time()
     
     print("Loading correction model...")
     correction_model, correction_tokenizer = load_correction_model()
     
-    # Parse ASR data from text file
-    input_dataframe = parse_asr_from_txt(input_txt_path)
+    # Parse summarization data from text file
+    input_dataframe = parse_summarization_from_txt(input_txt_path)
     
     if input_dataframe.empty:
-        print("No ASR data found to correct")
+        print("No summarization data found to correct")
         return pd.DataFrame()
     
-    print(f"Correcting {len(input_dataframe)} segments...")
+    print(f"Correcting {len(input_dataframe)} speaker summaries...")
     
-    corrected_texts = []
+    corrected_summaries = []
     
     for index, row in input_dataframe.iterrows():
-        print(f"Correcting segment {index + 1}/{len(input_dataframe)}...")
+        print(f"Correcting summary for {row['speaker']}...")
         
-        original_text = row["text"]
-        corrected_text, success_status = correct_text(
-            original_text, 
+        original_summary = row["summary"]
+        corrected_summary, success_status = correct_text(
+            original_summary, 
             correction_model, 
             correction_tokenizer
         )
         
-        corrected_texts.append(corrected_text)
+        corrected_summaries.append(corrected_summary)
         
-        print(f"Original: {original_text}")
-        print(f"Corrected: {corrected_text}")
+        print(f"Original: {original_summary}")
+        print(f"Corrected: {corrected_summary}")
         print("---")
     
-    input_dataframe["corrected_text"] = corrected_texts
+    input_dataframe["corrected_summary"] = corrected_summaries
     
     # Save to text file
     save_correction_to_txt(input_dataframe, output_txt_path)
     
     total_execution_time = time.time() - start_time
-    print(f"Correction completed in {total_execution_time:.2f} seconds")
+    print(f"Summarization correction completed in {total_execution_time:.2f} seconds")
     
     return input_dataframe
 
 
 if __name__ == "__main__":
-    result_dataframe = test_correction("asr.txt", "test_correction.txt")
+    result_dataframe = test_correction("summarization.txt", "test_correction.txt")
