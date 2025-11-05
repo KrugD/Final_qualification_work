@@ -30,14 +30,14 @@ def save_summarization_to_txt(dataframe, output_txt_path):
             file.write("=" * 50 + "\n\n")
 
 
-def parse_correction_from_txt(txt_file_path):
-    """Parse correction results from text file.
+def parse_asr_from_txt(txt_file_path):
+    """Parse ASR results from text file.
     
     Args:
-        txt_file_path: Path to correction text file
+        txt_file_path: Path to ASR text file
         
     Returns:
-        DataFrame: Parsed correction data
+        DataFrame: Parsed ASR data
     """
     data = []
     
@@ -45,26 +45,26 @@ def parse_correction_from_txt(txt_file_path):
         lines = file.readlines()
         
         current_speaker = None
-        current_corrected_text = None
+        current_text = None
         
         for line in lines:
             line = line.strip()
             
             if line.startswith("Speaker:"):
                 current_speaker = line.replace("Speaker:", "").strip()
-            elif line.startswith("Corrected:"):
-                current_corrected_text = line.replace("Corrected:", "").strip()
+            elif line.startswith("Text:"):
+                current_text = line.replace("Text:", "").strip()
                 
-                # When we have speaker and corrected text, add to results
-                if current_speaker and current_corrected_text:
+                # Once we've found speaker and text, we add them to the results
+                if current_speaker and current_text:
                     data.append({
                         "speaker": current_speaker,
-                        "corrected_text": current_corrected_text
+                        "corrected_text": current_text  # we use the same field for compatibility
                     })
                     
                     # Reset for next segment
                     current_speaker = None
-                    current_corrected_text = None
+                    current_text = None
     
     return pd.DataFrame(data)
 
@@ -81,7 +81,7 @@ def summarize_text(input_text, summarization_model, summarization_tokenizer):
         tuple: (summary_text, success_status)
     """
     try:
-        prompt_text = f"<LM> Сократи текст.\n {input_text}"
+        prompt_text = f"<LM> Создай краткое содержание текста, сохрани ключевые идеи:\n {input_text}"
         input_ids = torch.tensor([summarization_tokenizer.encode(prompt_text)]).to(get_device())
         
         outputs = summarization_model.generate(
@@ -104,10 +104,10 @@ def summarize_text(input_text, summarization_model, summarization_tokenizer):
 
 
 def test_summarization(input_txt_path, output_txt_path):
-    """Test text summarization model on corrected texts.
+    """Test text summarization model on ASR results.
     
     Args:
-        input_txt_path: Path to input text file with corrected texts
+        input_txt_path: Path to input text file with ASR results
         output_txt_path: Path for output text file with summaries
         
     Returns:
@@ -118,11 +118,11 @@ def test_summarization(input_txt_path, output_txt_path):
     print("Loading summarization model...")
     summarization_model, summarization_tokenizer = load_summarization_model()
     
-    # Parse correction data from text file
-    input_dataframe = parse_correction_from_txt(input_txt_path)
+    # Parse ASR data from text file
+    input_dataframe = parse_asr_from_txt(input_txt_path)
     
     if input_dataframe.empty:
-        print("No correction data found to summarize")
+        print("No ASR data found to summarize")
         return pd.DataFrame()
     
     # Group texts by speaker
@@ -183,7 +183,7 @@ def create_meeting_minutes(summary_txt_path, output_file_path):
         output_file_path: Path for output meeting minutes file
     """
     # Parse summary data
-    summary_dataframe = parse_correction_from_txt(summary_txt_path)  # Reusing parser since format is similar
+    summary_dataframe = parse_asr_from_txt(summary_txt_path)  # Используем ASR парсер
     
     with open(output_file_path, 'w', encoding='utf-8') as file:
         file.write("ПРОТОКОЛ ВСТРЕЧИ\n")
@@ -199,5 +199,5 @@ def create_meeting_minutes(summary_txt_path, output_file_path):
 
 
 if __name__ == "__main__":
-    result_dataframe = test_summarization("correction.txt", "test_summarization.txt")
+    result_dataframe = test_summarization("asr.txt", "test_summarization.txt")
     create_meeting_minutes("test_summarization.txt", "test_meeting_minutes.txt")
