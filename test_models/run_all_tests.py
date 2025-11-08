@@ -9,7 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from test_diarization import perform_diarization
 from test_asr import perform_speech_recognition
 from test_correction import test_correction
-from test_summarization import test_summarization, create_meeting_minutes
+from test_summarization import test_summarization
 
 
 def ensure_directory(directory_path):
@@ -17,12 +17,12 @@ def ensure_directory(directory_path):
     Path(directory_path).mkdir(parents=True, exist_ok=True)
 
 
-def run_complete_pipeline(audio_file_path, base_output_dir="pipeline_output"):
-    """Run complete pipeline with organized output structure.
+def run_complete_pipeline(audio_file_path, output_dir):
+    """Run complete pipeline with unified output structure.
     
     Args:
         audio_file_path: Path to input audio file
-        base_output_dir: Base directory for all outputs
+        output_dir: Output directory for this specific audio file
         
     Returns:
         bool: True if pipeline completed successfully
@@ -30,24 +30,21 @@ def run_complete_pipeline(audio_file_path, base_output_dir="pipeline_output"):
     # Get audio file name without extension
     audio_filename = Path(audio_file_path).stem
     
-    # Create output directories
-    dirs = {
-        'diarization': os.path.join(base_output_dir, "diarization"),
-        'asr': os.path.join(base_output_dir, "asr"), 
-        'summarization': os.path.join(base_output_dir, "summarization"),
-        'correction': os.path.join(base_output_dir, "correction")
-    }
-    
-    for dir_path in dirs.values():
-        ensure_directory(dir_path)
+    # Create output directory for this audio file
+    ensure_directory(output_dir)
     
     print("=" * 60)
     print("STARTING COMPLETE PIPELINE TEST")
     print("=" * 60)
     
+    # Define output file paths
+    diarization_output_path = os.path.join(output_dir, f"{audio_filename}_diarization.txt")
+    asr_output_path = os.path.join(output_dir, f"{audio_filename}_asr.txt")
+    summarization_output_path = os.path.join(output_dir, f"{audio_filename}_summarization.txt")
+    correction_output_path = os.path.join(output_dir, f"{audio_filename}_correction.txt")
+    
     # 1. Diarization
     print("\n1. DIARIZATION STAGE")
-    diarization_output_path = os.path.join(dirs['diarization'], f"{audio_filename}_diarization.txt")
     diarization_dataframe = perform_diarization(audio_file_path, diarization_output_path)
     
     if diarization_dataframe.empty:
@@ -56,7 +53,6 @@ def run_complete_pipeline(audio_file_path, base_output_dir="pipeline_output"):
     
     # 2. Speech Recognition
     print("\n2. SPEECH RECOGNITION STAGE")
-    asr_output_path = os.path.join(dirs['asr'], f"{audio_filename}_asr.txt")
     asr_dataframe = perform_speech_recognition(
         audio_file_path,
         diarization_output_path,
@@ -69,7 +65,6 @@ def run_complete_pipeline(audio_file_path, base_output_dir="pipeline_output"):
     
     # 3. Summarization
     print("\n3. SUMMARIZATION STAGE")
-    summarization_output_path = os.path.join(dirs['summarization'], f"{audio_filename}_summarization.txt")
     summarization_dataframe = test_summarization(asr_output_path, summarization_output_path)
     
     if summarization_dataframe.empty:
@@ -78,14 +73,13 @@ def run_complete_pipeline(audio_file_path, base_output_dir="pipeline_output"):
     
     # 4. Correction
     print("\n4. CORRECTION STAGE (Summarization Correction)")
-    correction_output_path = os.path.join(dirs['correction'], f"{audio_filename}_correction.txt")
     correction_dataframe = test_correction(summarization_output_path, correction_output_path)
     
     print("\n" + "=" * 60)
     print("PIPELINE COMPLETED SUCCESSFULLY")
     print("=" * 60)
     
-    print(f"Output files created:")
+    print(f"Output files created in {output_dir}:")
     print(f"- Diarization: {diarization_output_path}")
     print(f"- ASR: {asr_output_path}")
     print(f"- Summarization: {summarization_output_path}")
@@ -107,7 +101,7 @@ def split_audio_file(audio_file_path, chunk_duration_minutes=30):
     from pydub import AudioSegment
     import os
     
-    print(f"🔄 Splitting {audio_file_path} into {chunk_duration_minutes}-minute chunks...")
+    print(f"Splitting {audio_file_path} into {chunk_duration_minutes}-minute chunks...")
     
     audio = AudioSegment.from_file(audio_file_path)
     total_duration_minutes = len(audio) / (60 * 1000)
@@ -132,7 +126,7 @@ def split_audio_file(audio_file_path, chunk_duration_minutes=30):
         chunk_duration_min = len(chunk) / (60 * 1000)
         print(f"   Chunk {i+1}/{num_chunks}: {chunk_path} ({chunk_duration_min:.1f} min)")
     
-    print(f"✅ Created {len(chunk_paths)} chunks")
+    print(f"Created {len(chunk_paths)} chunks")
     return chunk_paths, chunks_dir
 
 
@@ -148,21 +142,21 @@ def combine_txt_files(chunk_dirs, combined_dir, file_type, output_filename):
     all_content = []
     
     for chunk_dir in chunk_dirs:
-        file_type_dir = os.path.join(chunk_dir, file_type)
-        if os.path.exists(file_type_dir):
-            files = os.listdir(file_type_dir)
-            if files:
-                file_path = os.path.join(file_type_dir, files[0])
-                if os.path.exists(file_path):
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = f.read()
-                        all_content.append(content)
+        # For chunk directories, files are directly in the directory
+        pattern = f"*{file_type}.txt"
+        files = list(Path(chunk_dir).glob(pattern))
+        if files:
+            file_path = files[0]
+            if os.path.exists(file_path):
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    all_content.append(content)
     
     if all_content:
         output_path = os.path.join(combined_dir, output_filename)
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write("\n\n".join(all_content))
-        print(f"   📄 Combined {file_type} files")
+        print(f"Combined {file_type} files")
 
 
 def combine_summaries(chunk_dirs, combined_dir, audio_filename):
@@ -177,18 +171,18 @@ def combine_summaries(chunk_dirs, combined_dir, audio_filename):
     all_asr_texts = []
     
     for chunk_dir in chunk_dirs:
-        asr_dir = os.path.join(chunk_dir, "asr")
-        if os.path.exists(asr_dir):
-            files = os.listdir(asr_dir)
-            if files:
-                asr_file_path = os.path.join(asr_dir, files[0])
-                if os.path.exists(asr_file_path):
-                    with open(asr_file_path, 'r', encoding='utf-8') as f:
-                        all_asr_texts.append(f.read())
+        # Look for ASR files directly in chunk directory
+        pattern = f"*asr.txt"
+        files = list(Path(chunk_dir).glob(pattern))
+        if files:
+            asr_file_path = files[0]
+            if os.path.exists(asr_file_path):
+                with open(asr_file_path, 'r', encoding='utf-8') as f:
+                    all_asr_texts.append(f.read())
     
     if all_asr_texts:
         # Create temporary file with all text
-        combined_asr_path = os.path.join(combined_dir, f"{audio_filename}_all_asr.txt")
+        combined_asr_path = os.path.join(combined_dir, f"{audio_filename}_asr.txt")
         with open(combined_asr_path, 'w', encoding='utf-8') as f:
             f.write("\n\n".join(all_asr_texts))
         
@@ -200,7 +194,7 @@ def combine_summaries(chunk_dirs, combined_dir, audio_filename):
         correction_output_path = os.path.join(combined_dir, f"{audio_filename}_correction.txt")
         test_correction(summarization_output_path, correction_output_path)
         
-        print(f"   📊 Created overall summarization")
+        print(f"Created overall summarization")
 
 
 def process_long_audio(audio_file_path, base_output_dir="pipeline_output", chunk_duration_minutes=30):
@@ -218,13 +212,17 @@ def process_long_audio(audio_file_path, base_output_dir="pipeline_output", chunk
     chunk_paths, chunks_dir = split_audio_file(audio_file_path, chunk_duration_minutes)
     audio_filename = Path(audio_file_path).stem
     
+    # Create final output directory (same as for short files)
+    final_output_dir = os.path.join(base_output_dir, audio_filename)
+    ensure_directory(final_output_dir)
+    
     chunk_dirs = []
     
     try:
         # Process each chunk
         for i, chunk_path in enumerate(chunk_paths):
             print(f"\n{'='*60}")
-            print(f"🎯 PROCESSING CHUNK {i+1}/{len(chunk_paths)}")
+            print(f"PROCESSING CHUNK {i+1}/{len(chunk_paths)}")
             print(f"{'='*60}")
             
             # Create separate directory for each chunk
@@ -232,35 +230,31 @@ def process_long_audio(audio_file_path, base_output_dir="pipeline_output", chunk
             success = run_complete_pipeline(chunk_path, chunk_output_dir)
             
             if success:
-                print(f"✅ Chunk {i+1} processed successfully")
+                print(f"Chunk {i+1} processed successfully")
                 chunk_dirs.append(chunk_output_dir)
             else:
-                print(f"❌ Failed to process chunk {i+1}")
+                print(f"Failed to process chunk {i+1}")
                 return False
         
-        # Create final output directory (same as for short files)
-        final_output_dir = os.path.join(base_output_dir, audio_filename)
-        ensure_directory(final_output_dir)
-        
         # Combine results into final directory
-        print(f"\n🔄 Combining results into final directory...")
+        print(f"\nCombining results into final directory...")
         
         # Combine diarization
         combine_txt_files(chunk_dirs, final_output_dir, "diarization", f"{audio_filename}_diarization.txt")
         
-        # Combine ASR
-        combine_txt_files(chunk_dirs, final_output_dir, "asr", f"{audio_filename}_asr.txt")
+        # Combine ASR (skip the old combine_txt_files to avoid duplicate files)
+        # We'll handle ASR combination in combine_summaries
         
         # Combine summaries and create overall summary
         combine_summaries(chunk_dirs, final_output_dir, audio_filename)
         
-        print(f"✅ Final results saved to {final_output_dir}")
+        print(f"Final results saved to {final_output_dir}")
         
         return True
         
     finally:
         # Cleanup: remove temporary chunk files and directories
-        print(f"\n🧹 Cleaning up temporary files...")
+        print(f"\nCleaning up temporary files...")
         
         # Remove chunk audio files
         if os.path.exists(chunks_dir):
