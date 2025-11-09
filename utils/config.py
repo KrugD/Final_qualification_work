@@ -28,6 +28,12 @@ class ModelConfig:
     MIN_SEGMENT_DURATION = 0.5  # seconds
     MAX_SUMMARY_INPUT_LENGTH = 2000  # characters
 
+    # Speaker clustering parameters
+    CLUSTERING_DISTANCE_THRESHOLD = 0.4
+    TARGET_CHUNK_DURATION_MIN = 25
+    MAX_CHUNK_DURATION_MIN = 30
+    MIN_SILENCE_LEN_MS = 2000  # 2 seconds minimum silence
+    SILENCE_THRESH_DB = -40    # Silence threshold in dB
 
 def get_device():
     """Get available device (CUDA or CPU)."""

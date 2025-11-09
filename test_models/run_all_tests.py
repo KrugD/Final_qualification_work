@@ -10,6 +10,7 @@ from test_diarization import perform_diarization
 from test_asr import perform_speech_recognition
 from test_correction import test_correction
 from test_summarization import test_summarization
+from speaker_clustering import SpeakerClustering
 
 
 def ensure_directory(directory_path):
@@ -88,186 +89,6 @@ def run_complete_pipeline(audio_file_path, output_dir):
     return True
 
 
-def split_audio_file(audio_file_path, chunk_duration_minutes=30):
-    """Split audio file into chunks.
-    
-    Args:
-        audio_file_path: Path to input audio file
-        chunk_duration_minutes: Duration of each chunk in minutes
-        
-    Returns:
-        list: List of paths to chunk files
-    """
-    from pydub import AudioSegment
-    import os
-    
-    print(f"Splitting {audio_file_path} into {chunk_duration_minutes}-minute chunks...")
-    
-    audio = AudioSegment.from_file(audio_file_path)
-    total_duration_minutes = len(audio) / (60 * 1000)
-    chunk_duration_ms = chunk_duration_minutes * 60 * 1000
-    
-    audio_filename = Path(audio_file_path).stem
-    chunks_dir = f"audio_chunks_{audio_filename}"
-    os.makedirs(chunks_dir, exist_ok=True)
-    
-    chunk_paths = []
-    num_chunks = (len(audio) + chunk_duration_ms - 1) // chunk_duration_ms
-    
-    for i in range(num_chunks):
-        start_ms = i * chunk_duration_ms
-        end_ms = min((i + 1) * chunk_duration_ms, len(audio))
-        
-        chunk = audio[start_ms:end_ms]
-        chunk_path = os.path.join(chunks_dir, f"chunk_{i+1:02d}_{audio_filename}.wav")
-        chunk.export(chunk_path, format="wav")
-        chunk_paths.append(chunk_path)
-        
-        chunk_duration_min = len(chunk) / (60 * 1000)
-        print(f"   Chunk {i+1}/{num_chunks}: {chunk_path} ({chunk_duration_min:.1f} min)")
-    
-    print(f"Created {len(chunk_paths)} chunks")
-    return chunk_paths, chunks_dir
-
-
-def combine_txt_files(chunk_dirs, combined_dir, file_type, output_filename):
-    """Combine text files from chunks.
-    
-    Args:
-        chunk_dirs: List of chunk directory paths
-        combined_dir: Directory for combined results
-        file_type: Type of files to combine ('diarization', 'asr', etc.)
-        output_filename: Name for combined output file
-    """
-    all_content = []
-    
-    for chunk_dir in chunk_dirs:
-        # For chunk directories, files are directly in the directory
-        pattern = f"*{file_type}.txt"
-        files = list(Path(chunk_dir).glob(pattern))
-        if files:
-            file_path = files[0]
-            if os.path.exists(file_path):
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    all_content.append(content)
-    
-    if all_content:
-        output_path = os.path.join(combined_dir, output_filename)
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write("\n\n".join(all_content))
-        print(f"Combined {file_type} files")
-
-
-def combine_summaries(chunk_dirs, combined_dir, audio_filename):
-    """Combine summaries and create overall summary.
-    
-    Args:
-        chunk_dirs: List of chunk directory paths
-        combined_dir: Directory for combined results
-        audio_filename: Original audio filename
-    """
-    # Collect all ASR texts for overall summarization
-    all_asr_texts = []
-    
-    for chunk_dir in chunk_dirs:
-        # Look for ASR files directly in chunk directory
-        pattern = f"*asr.txt"
-        files = list(Path(chunk_dir).glob(pattern))
-        if files:
-            asr_file_path = files[0]
-            if os.path.exists(asr_file_path):
-                with open(asr_file_path, 'r', encoding='utf-8') as f:
-                    all_asr_texts.append(f.read())
-    
-    if all_asr_texts:
-        # Create temporary file with all text
-        combined_asr_path = os.path.join(combined_dir, f"{audio_filename}_asr.txt")
-        with open(combined_asr_path, 'w', encoding='utf-8') as f:
-            f.write("\n\n".join(all_asr_texts))
-        
-        # Create overall summarization from all text
-        summarization_output_path = os.path.join(combined_dir, f"{audio_filename}_summarization.txt")
-        test_summarization(combined_asr_path, summarization_output_path)
-        
-        # Create corrected summarization
-        correction_output_path = os.path.join(combined_dir, f"{audio_filename}_correction.txt")
-        test_correction(summarization_output_path, correction_output_path)
-        
-        print(f"Created overall summarization")
-
-
-def process_long_audio(audio_file_path, base_output_dir="pipeline_output", chunk_duration_minutes=30):
-    """Process long audio file by splitting into chunks.
-    
-    Args:
-        audio_file_path: Path to input audio file
-        base_output_dir: Base directory for all outputs
-        chunk_duration_minutes: Duration of each chunk in minutes
-        
-    Returns:
-        bool: True if processing completed successfully
-    """
-    # Split audio into chunks
-    chunk_paths, chunks_dir = split_audio_file(audio_file_path, chunk_duration_minutes)
-    audio_filename = Path(audio_file_path).stem
-    
-    # Create final output directory (same as for short files)
-    final_output_dir = os.path.join(base_output_dir, audio_filename)
-    ensure_directory(final_output_dir)
-    
-    chunk_dirs = []
-    
-    try:
-        # Process each chunk
-        for i, chunk_path in enumerate(chunk_paths):
-            print(f"\n{'='*60}")
-            print(f"PROCESSING CHUNK {i+1}/{len(chunk_paths)}")
-            print(f"{'='*60}")
-            
-            # Create separate directory for each chunk
-            chunk_output_dir = os.path.join(base_output_dir, f"{audio_filename}_chunk_{i+1:02d}")
-            success = run_complete_pipeline(chunk_path, chunk_output_dir)
-            
-            if success:
-                print(f"Chunk {i+1} processed successfully")
-                chunk_dirs.append(chunk_output_dir)
-            else:
-                print(f"Failed to process chunk {i+1}")
-                return False
-        
-        # Combine results into final directory
-        print(f"\nCombining results into final directory...")
-        
-        # Combine diarization
-        combine_txt_files(chunk_dirs, final_output_dir, "diarization", f"{audio_filename}_diarization.txt")
-        
-        # Combine ASR (skip the old combine_txt_files to avoid duplicate files)
-        # We'll handle ASR combination in combine_summaries
-        
-        # Combine summaries and create overall summary
-        combine_summaries(chunk_dirs, final_output_dir, audio_filename)
-        
-        print(f"Final results saved to {final_output_dir}")
-        
-        return True
-        
-    finally:
-        # Cleanup: remove temporary chunk files and directories
-        print(f"\nCleaning up temporary files...")
-        
-        # Remove chunk audio files
-        if os.path.exists(chunks_dir):
-            shutil.rmtree(chunks_dir)
-            print(f"   Removed temporary audio chunks: {chunks_dir}")
-        
-        # Remove chunk processing directories
-        for chunk_dir in chunk_dirs:
-            if os.path.exists(chunk_dir):
-                shutil.rmtree(chunk_dir)
-                print(f"   Removed temporary directory: {chunk_dir}")
-
-
 def get_audio_duration(audio_file_path):
     """Get duration of audio file in minutes.
     
@@ -301,12 +122,140 @@ def process_audio_file(audio_file_path, base_output_dir="pipeline_output"):
     output_dir = os.path.join(base_output_dir, audio_filename)
     
     if duration_minutes > 30:
-        print("File is long - splitting into chunks...")
-        return process_long_audio(audio_file_path, base_output_dir)
+        print("File is long - processing with speaker clustering...")
+        return process_long_audio_with_clustering(audio_file_path, base_output_dir)
     else:
         print("File is short - processing as single file...")
-        # For short files, use the named directory directly
         return run_complete_pipeline(audio_file_path, output_dir)
+
+
+def process_long_audio_with_clustering(audio_file_path, base_output_dir="pipeline_output"):
+    """Process long audio file with speaker clustering.
+    
+    Args:
+        audio_file_path: Path to input audio file
+        base_output_dir: Base directory for all outputs
+        
+    Returns:
+        bool: True if processing completed successfully
+    """
+    audio_filename = Path(audio_file_path).stem
+    final_output_dir = os.path.join(base_output_dir, audio_filename)
+    ensure_directory(final_output_dir)
+    
+    # Initialize speaker clustering
+    from utils.config import ModelConfig
+    speaker_clustering = SpeakerClustering(ModelConfig.DIARIZATION_TOKEN)
+    
+    try:
+        # Process long audio with clustering
+        print("Processing long audio with speaker clustering...")
+        clustering_result = speaker_clustering.process_long_audio(audio_file_path, final_output_dir)
+        
+        speaker_mapping = clustering_result['speaker_mapping']
+        chunk_paths = clustering_result['chunk_paths']
+        temp_dir = clustering_result['temp_dir']
+        
+        # Process each chunk with global speaker IDs
+        chunk_diarizations = {}
+        chunk_asr_contents = []
+        
+        for i, chunk_path in enumerate(chunk_paths):
+            print(f"\n{'='*60}")
+            print(f"PROCESSING CHUNK {i+1}/{len(chunk_paths)} WITH GLOBAL SPEAKER IDs")
+            print(f"{'='*60}")
+            
+            # Create temporary directory for this chunk
+            chunk_output_dir = os.path.join(base_output_dir, f"{audio_filename}_chunk_{i+1:02d}")
+            
+            # Process chunk
+            success = run_complete_pipeline(chunk_path, chunk_output_dir)
+            
+            if success:
+                print(f"Chunk {i+1} processed successfully")
+                
+                # Update diarization with global speaker IDs
+                diarization_file = os.path.join(chunk_output_dir, f"{Path(chunk_path).stem}_diarization.txt")
+                if os.path.exists(diarization_file):
+                    updated_content = speaker_clustering.update_diarization_with_global_speakers(
+                        diarization_file, speaker_mapping, chunk_path
+                    )
+                    chunk_diarizations[chunk_path] = updated_content
+                    
+                    # Save updated diarization
+                    with open(diarization_file, 'w', encoding='utf-8') as f:
+                        f.write(updated_content)
+                
+                # Store ASR content for combining
+                asr_file = os.path.join(chunk_output_dir, f"{Path(chunk_path).stem}_asr.txt")
+                if os.path.exists(asr_file):
+                    with open(asr_file, 'r', encoding='utf-8') as f:
+                        chunk_asr_contents.append(f.read())
+                        
+            else:
+                print(f"Failed to process chunk {i+1}")
+                return False
+        
+        # Combine diarization results with global speaker IDs
+        print("\nCombining diarization results with global speaker IDs...")
+        combined_diarization_path = os.path.join(final_output_dir, f"{audio_filename}_diarization.txt")
+        with open(combined_diarization_path, 'w', encoding='utf-8') as f:
+            f.write("SPEAKER DIARIZATION RESULTS (GLOBAL SPEAKER IDs)\n")
+            f.write("=" * 50 + "\n\n")
+            for chunk_path, content in chunk_diarizations.items():
+                # Remove headers from subsequent files
+                lines = content.split('\n')
+                content_without_header = '\n'.join([line for line in lines 
+                                                  if not line.startswith('SPEAKER DIARIZATION') 
+                                                  and not line.startswith('=')])
+                f.write(content_without_header)
+                f.write("\n")
+        
+        # Combine ASR results
+        print("Combining ASR results...")
+        combined_asr_path = os.path.join(final_output_dir, f"{audio_filename}_asr.txt")
+        with open(combined_asr_path, 'w', encoding='utf-8') as f:
+            f.write("SPEECH RECOGNITION RESULTS\n")
+            f.write("=" * 50 + "\n\n")
+            for i, content in enumerate(chunk_asr_contents):
+                if i > 0:  # Remove header from subsequent files
+                    lines = content.split('\n')
+                    content = '\n'.join([line for line in lines 
+                                       if not line.startswith('SPEECH RECOGNITION') 
+                                       and not line.startswith('=')])
+                f.write(content)
+                if i < len(chunk_asr_contents) - 1:
+                    f.write("\n\n")
+        
+        # Create overall summarization and correction
+        print("Creating overall summarization...")
+        summarization_output_path = os.path.join(final_output_dir, f"{audio_filename}_summarization.txt")
+        correction_output_path = os.path.join(final_output_dir, f"{audio_filename}_correction.txt")
+        
+        test_summarization(combined_asr_path, summarization_output_path)
+        test_correction(summarization_output_path, correction_output_path)
+        
+        print(f"Final results with global speaker IDs saved to {final_output_dir}")
+        return True
+        
+    except Exception as e:
+        print(f"Error in long audio processing: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+        
+    finally:
+        # Cleanup temporary files
+        if 'temp_dir' in locals() and os.path.exists(temp_dir):
+            print("Cleaning up temporary audio chunk files...")
+            shutil.rmtree(temp_dir)
+            
+        # Cleanup chunk directories
+        chunk_dirs = [os.path.join(base_output_dir, d) for d in os.listdir(base_output_dir) 
+                     if d.startswith(f"{audio_filename}_chunk_")]
+        for chunk_dir in chunk_dirs:
+            if os.path.exists(chunk_dir):
+                shutil.rmtree(chunk_dir)
 
 
 if __name__ == "__main__":
