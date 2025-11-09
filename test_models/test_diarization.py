@@ -30,15 +30,7 @@ def save_diarization_to_txt(dataframe, output_txt_path):
 
 
 def perform_diarization(audio_file_path, output_txt_path):
-    """Perform speaker diarization on audio file.
-    
-    Args:
-        audio_file_path: Path to input audio file
-        output_txt_path: Path for output text file
-        
-    Returns:
-        DataFrame: DataFrame with diarization results
-    """
+    """Perform speaker diarization on audio file."""
     start_time = time.time()
     
     print("Loading diarization model...")
@@ -50,17 +42,18 @@ def perform_diarization(audio_file_path, output_txt_path):
     
     segments = []
     
-    for turn, _, speaker in diarization.speaker_diarization.itertracks(yield_label=True):
-        if turn.end - turn.start < ModelConfig.MIN_SEGMENT_DURATION:
+    # Correct way to access diarization results in new pyannote
+    for segment, track, speaker in diarization.speaker_diarization.itertracks(yield_label=True):
+        if segment.end - segment.start < ModelConfig.MIN_SEGMENT_DURATION:
             continue
             
         segments.append({
             "speaker": speaker,
-            "start_time": turn.start,
-            "end_time": turn.end,
-            "duration": turn.end - turn.start
+            "start_time": segment.start,
+            "end_time": segment.end,
+            "duration": segment.end - segment.start
         })
-        print(f"{speaker} [{turn.start:.1f}s - {turn.end:.1f}s]")
+        print(f"{speaker} [{segment.start:.1f}s - {segment.end:.1f}s]")
     
     results_dataframe = pd.DataFrame(segments)
     
