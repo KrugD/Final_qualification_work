@@ -11,6 +11,7 @@ from test_asr import perform_speech_recognition
 from test_correction import test_correction
 from test_summarization import test_summarization
 from speaker_clustering import SpeakerClustering
+from utils.config import ModelConfig
 
 
 def ensure_directory(directory_path):
@@ -121,7 +122,7 @@ def process_audio_file(audio_file_path, base_output_dir="pipeline_output"):
     # Create output directory with audio filename
     output_dir = os.path.join(base_output_dir, audio_filename)
     
-    if duration_minutes > 30:
+    if duration_minutes > ModelConfig.MAX_CHUNK_DURATION:
         print("File is long - processing with speaker clustering...")
         return process_long_audio_with_clustering(audio_file_path, base_output_dir)
     else:

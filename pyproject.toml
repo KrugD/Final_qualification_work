@@ -12,6 +12,7 @@ dependencies = [
     "pyannote-audio>=4.0.1",
     "pydub>=0.25.1",
     "python-dotenv>=1.1.1",
+    "seaborn>=0.13.2",
     "sentencepiece>=0.2.1",
     "torch>=2.9.0",
     "transformers>=4.57.1",

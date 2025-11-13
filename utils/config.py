@@ -24,14 +24,19 @@ class ModelConfig:
     # Summarization model configuration
     SUMMARIZATION_MODEL_NAME = "RussianNLP/FRED-T5-Summarizer"
     
+    # Speaker clustering models configuration
+    EMBEDDING_MODEL_NAME = "pyannote/embedding"
+    CLUSTERING_MODEL_NAME = "pyannote/speaker-diarization-3.1"
+    
     # Processing parameters
     MIN_SEGMENT_DURATION = 0.5  # seconds
     MAX_SUMMARY_INPUT_LENGTH = 2000  # characters
 
     # Speaker clustering parameters
     CLUSTERING_DISTANCE_THRESHOLD = 0.4
-    TARGET_CHUNK_DURATION_MIN = 25
-    MAX_CHUNK_DURATION_MIN = 30
+    TARGET_CHUNK_DURATION_MIN = 20
+    TARGET_CHUNK_DURATION_MAX = 25
+    MAX_CHUNK_DURATION = 50   # Also used as threshold for long/short audio classification
     MIN_SILENCE_LEN_MS = 2000  # 2 seconds minimum silence
     SILENCE_THRESH_DB = -40    # Silence threshold in dB
 
