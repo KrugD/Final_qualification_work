@@ -76,4 +76,4 @@ def perform_diarization(audio_file_path, output_txt_path):
 
 if __name__ == "__main__":
     audio_file = "1.wav"
-    dataframe = perform_diarization(audio_file, "test_diarization.txt")
+    dataframe = perform_diarization(audio_file, "diarization_output.txt")
