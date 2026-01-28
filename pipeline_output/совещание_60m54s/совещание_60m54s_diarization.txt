@@ -1,0 +1,2083 @@
+SPEAKER DIARIZATION RESULTS
+========================================
+
+Speaker: SPEAKER_04
+Start: 0.03s
+End: 7.10s
+Duration: 7.07s
+------------------------------
+Speaker: SPEAKER_04
+Start: 7.64s
+End: 9.43s
+Duration: 1.79s
+------------------------------
+Speaker: SPEAKER_04
+Start: 10.68s
+End: 24.03s
+Duration: 13.35s
+------------------------------
+Speaker: SPEAKER_04
+Start: 24.62s
+End: 27.44s
+Duration: 2.82s
+------------------------------
+Speaker: SPEAKER_04
+Start: 27.77s
+End: 33.24s
+Duration: 5.47s
+------------------------------
+Speaker: SPEAKER_04
+Start: 33.97s
+End: 54.39s
+Duration: 20.42s
+------------------------------
+Speaker: SPEAKER_04
+Start: 57.64s
+End: 71.92s
+Duration: 14.28s
+------------------------------
+Speaker: SPEAKER_04
+Start: 73.23s
+End: 117.65s
+Duration: 44.42s
+------------------------------
+Speaker: SPEAKER_04
+Start: 117.95s
+End: 118.76s
+Duration: 0.81s
+------------------------------
+Speaker: SPEAKER_04
+Start: 119.07s
+End: 134.56s
+Duration: 15.49s
+------------------------------
+Speaker: SPEAKER_04
+Start: 134.64s
+End: 137.68s
+Duration: 3.04s
+------------------------------
+Speaker: SPEAKER_04
+Start: 138.64s
+End: 144.53s
+Duration: 5.89s
+------------------------------
+Speaker: SPEAKER_04
+Start: 145.04s
+End: 151.06s
+Duration: 6.02s
+------------------------------
+Speaker: SPEAKER_04
+Start: 151.18s
+End: 155.72s
+Duration: 4.54s
+------------------------------
+Speaker: SPEAKER_04
+Start: 156.53s
+End: 163.90s
+Duration: 7.37s
+------------------------------
+Speaker: SPEAKER_04
+Start: 164.73s
+End: 170.54s
+Duration: 5.81s
+------------------------------
+Speaker: SPEAKER_04
+Start: 171.72s
+End: 183.36s
+Duration: 11.64s
+------------------------------
+Speaker: SPEAKER_04
+Start: 184.59s
+End: 187.92s
+Duration: 3.32s
+------------------------------
+Speaker: SPEAKER_04
+Start: 189.05s
+End: 208.37s
+Duration: 19.32s
+------------------------------
+Speaker: SPEAKER_04
+Start: 208.59s
+End: 217.60s
+Duration: 9.01s
+------------------------------
+Speaker: SPEAKER_04
+Start: 217.97s
+End: 219.47s
+Duration: 1.50s
+------------------------------
+Speaker: SPEAKER_04
+Start: 222.73s
+End: 232.08s
+Duration: 9.35s
+------------------------------
+Speaker: SPEAKER_04
+Start: 232.43s
+End: 260.16s
+Duration: 27.73s
+------------------------------
+Speaker: SPEAKER_04
+Start: 260.82s
+End: 267.48s
+Duration: 6.67s
+------------------------------
+Speaker: SPEAKER_04
+Start: 267.63s
+End: 293.79s
+Duration: 26.16s
+------------------------------
+Speaker: SPEAKER_04
+Start: 294.26s
+End: 300.57s
+Duration: 6.31s
+------------------------------
+Speaker: SPEAKER_04
+Start: 303.09s
+End: 311.48s
+Duration: 8.39s
+------------------------------
+Speaker: SPEAKER_04
+Start: 312.54s
+End: 329.16s
+Duration: 16.62s
+------------------------------
+Speaker: SPEAKER_04
+Start: 329.38s
+End: 336.64s
+Duration: 7.26s
+------------------------------
+Speaker: SPEAKER_04
+Start: 337.95s
+End: 343.62s
+Duration: 5.67s
+------------------------------
+Speaker: SPEAKER_01
+Start: 346.15s
+End: 386.16s
+Duration: 40.01s
+------------------------------
+Speaker: SPEAKER_01
+Start: 386.43s
+End: 388.34s
+Duration: 1.91s
+------------------------------
+Speaker: SPEAKER_01
+Start: 389.27s
+End: 409.67s
+Duration: 20.40s
+------------------------------
+Speaker: SPEAKER_01
+Start: 409.87s
+End: 413.84s
+Duration: 3.97s
+------------------------------
+Speaker: SPEAKER_01
+Start: 414.45s
+End: 431.90s
+Duration: 17.45s
+------------------------------
+Speaker: SPEAKER_01
+Start: 433.40s
+End: 442.17s
+Duration: 8.77s
+------------------------------
+Speaker: SPEAKER_01
+Start: 442.98s
+End: 450.48s
+Duration: 7.49s
+------------------------------
+Speaker: SPEAKER_01
+Start: 451.57s
+End: 459.64s
+Duration: 8.07s
+------------------------------
+Speaker: SPEAKER_01
+Start: 459.81s
+End: 468.33s
+Duration: 8.52s
+------------------------------
+Speaker: SPEAKER_01
+Start: 468.84s
+End: 471.91s
+Duration: 3.07s
+------------------------------
+Speaker: SPEAKER_01
+Start: 472.65s
+End: 478.27s
+Duration: 5.62s
+------------------------------
+Speaker: SPEAKER_01
+Start: 478.84s
+End: 484.80s
+Duration: 5.96s
+------------------------------
+Speaker: SPEAKER_01
+Start: 485.39s
+End: 490.96s
+Duration: 5.57s
+------------------------------
+Speaker: SPEAKER_01
+Start: 491.31s
+End: 504.27s
+Duration: 12.96s
+------------------------------
+Speaker: SPEAKER_01
+Start: 504.96s
+End: 514.01s
+Duration: 9.05s
+------------------------------
+Speaker: SPEAKER_01
+Start: 514.92s
+End: 521.76s
+Duration: 6.83s
+------------------------------
+Speaker: SPEAKER_01
+Start: 522.43s
+End: 531.41s
+Duration: 8.98s
+------------------------------
+Speaker: SPEAKER_01
+Start: 532.32s
+End: 538.68s
+Duration: 6.36s
+------------------------------
+Speaker: SPEAKER_01
+Start: 539.44s
+End: 544.92s
+Duration: 5.48s
+------------------------------
+Speaker: SPEAKER_01
+Start: 545.62s
+End: 550.95s
+Duration: 5.33s
+------------------------------
+Speaker: SPEAKER_01
+Start: 551.79s
+End: 567.28s
+Duration: 15.49s
+------------------------------
+Speaker: SPEAKER_01
+Start: 568.48s
+End: 574.96s
+Duration: 6.48s
+------------------------------
+Speaker: SPEAKER_01
+Start: 575.99s
+End: 587.47s
+Duration: 11.48s
+------------------------------
+Speaker: SPEAKER_01
+Start: 588.24s
+End: 599.68s
+Duration: 11.44s
+------------------------------
+Speaker: SPEAKER_01
+Start: 600.07s
+End: 610.55s
+Duration: 10.48s
+------------------------------
+Speaker: SPEAKER_01
+Start: 611.73s
+End: 617.54s
+Duration: 5.81s
+------------------------------
+Speaker: SPEAKER_01
+Start: 618.25s
+End: 623.29s
+Duration: 5.05s
+------------------------------
+Speaker: SPEAKER_01
+Start: 624.05s
+End: 634.16s
+Duration: 10.11s
+------------------------------
+Speaker: SPEAKER_01
+Start: 634.77s
+End: 640.03s
+Duration: 5.27s
+------------------------------
+Speaker: SPEAKER_01
+Start: 641.28s
+End: 649.75s
+Duration: 8.47s
+------------------------------
+Speaker: SPEAKER_01
+Start: 650.02s
+End: 658.44s
+Duration: 8.42s
+------------------------------
+Speaker: SPEAKER_01
+Start: 658.88s
+End: 664.67s
+Duration: 5.79s
+------------------------------
+Speaker: SPEAKER_01
+Start: 665.33s
+End: 673.16s
+Duration: 7.83s
+------------------------------
+Speaker: SPEAKER_01
+Start: 673.21s
+End: 682.89s
+Duration: 9.69s
+------------------------------
+Speaker: SPEAKER_01
+Start: 683.33s
+End: 692.95s
+Duration: 9.62s
+------------------------------
+Speaker: SPEAKER_01
+Start: 693.48s
+End: 706.76s
+Duration: 13.28s
+------------------------------
+Speaker: SPEAKER_01
+Start: 707.87s
+End: 740.64s
+Duration: 32.77s
+------------------------------
+Speaker: SPEAKER_01
+Start: 741.42s
+End: 750.80s
+Duration: 9.38s
+------------------------------
+Speaker: SPEAKER_01
+Start: 751.37s
+End: 758.21s
+Duration: 6.83s
+------------------------------
+Speaker: SPEAKER_01
+Start: 758.58s
+End: 766.92s
+Duration: 8.34s
+------------------------------
+Speaker: SPEAKER_01
+Start: 767.46s
+End: 774.75s
+Duration: 7.29s
+------------------------------
+Speaker: SPEAKER_01
+Start: 775.54s
+End: 791.92s
+Duration: 16.39s
+------------------------------
+Speaker: SPEAKER_01
+Start: 792.43s
+End: 797.44s
+Duration: 5.01s
+------------------------------
+Speaker: SPEAKER_01
+Start: 798.40s
+End: 813.15s
+Duration: 14.75s
+------------------------------
+Speaker: SPEAKER_01
+Start: 813.66s
+End: 820.44s
+Duration: 6.78s
+------------------------------
+Speaker: SPEAKER_01
+Start: 820.76s
+End: 831.43s
+Duration: 10.66s
+------------------------------
+Speaker: SPEAKER_01
+Start: 831.83s
+End: 833.84s
+Duration: 2.01s
+------------------------------
+Speaker: SPEAKER_01
+Start: 834.45s
+End: 835.55s
+Duration: 1.10s
+------------------------------
+Speaker: SPEAKER_04
+Start: 837.30s
+End: 840.81s
+Duration: 3.51s
+------------------------------
+Speaker: SPEAKER_00
+Start: 843.16s
+End: 845.82s
+Duration: 2.67s
+------------------------------
+Speaker: SPEAKER_00
+Start: 846.14s
+End: 848.15s
+Duration: 2.01s
+------------------------------
+Speaker: SPEAKER_00
+Start: 848.30s
+End: 849.64s
+Duration: 1.33s
+------------------------------
+Speaker: SPEAKER_00
+Start: 850.18s
+End: 852.44s
+Duration: 2.26s
+------------------------------
+Speaker: SPEAKER_00
+Start: 852.89s
+End: 854.95s
+Duration: 2.06s
+------------------------------
+Speaker: SPEAKER_00
+Start: 855.51s
+End: 857.21s
+Duration: 1.70s
+------------------------------
+Speaker: SPEAKER_00
+Start: 857.72s
+End: 861.45s
+Duration: 3.73s
+------------------------------
+Speaker: SPEAKER_00
+Start: 861.72s
+End: 862.97s
+Duration: 1.25s
+------------------------------
+Speaker: SPEAKER_00
+Start: 864.13s
+End: 866.65s
+Duration: 2.51s
+------------------------------
+Speaker: SPEAKER_00
+Start: 866.80s
+End: 868.15s
+Duration: 1.35s
+------------------------------
+Speaker: SPEAKER_00
+Start: 868.52s
+End: 869.36s
+Duration: 0.84s
+------------------------------
+Speaker: SPEAKER_00
+Start: 869.50s
+End: 871.56s
+Duration: 2.06s
+------------------------------
+Speaker: SPEAKER_00
+Start: 871.88s
+End: 874.34s
+Duration: 2.46s
+------------------------------
+Speaker: SPEAKER_00
+Start: 874.85s
+End: 875.86s
+Duration: 1.01s
+------------------------------
+Speaker: SPEAKER_00
+Start: 876.23s
+End: 877.45s
+Duration: 1.22s
+------------------------------
+Speaker: SPEAKER_00
+Start: 877.92s
+End: 879.24s
+Duration: 1.32s
+------------------------------
+Speaker: SPEAKER_00
+Start: 879.54s
+End: 880.48s
+Duration: 0.94s
+------------------------------
+Speaker: SPEAKER_00
+Start: 881.55s
+End: 883.40s
+Duration: 1.86s
+------------------------------
+Speaker: SPEAKER_00
+Start: 883.83s
+End: 885.61s
+Duration: 1.79s
+------------------------------
+Speaker: SPEAKER_00
+Start: 886.04s
+End: 887.25s
+Duration: 1.21s
+------------------------------
+Speaker: SPEAKER_00
+Start: 888.13s
+End: 890.04s
+Duration: 1.91s
+------------------------------
+Speaker: SPEAKER_00
+Start: 890.90s
+End: 892.95s
+Duration: 2.06s
+------------------------------
+Speaker: SPEAKER_00
+Start: 893.56s
+End: 894.27s
+Duration: 0.71s
+------------------------------
+Speaker: SPEAKER_00
+Start: 894.83s
+End: 896.30s
+Duration: 1.47s
+------------------------------
+Speaker: SPEAKER_00
+Start: 896.73s
+End: 897.95s
+Duration: 1.22s
+------------------------------
+Speaker: SPEAKER_00
+Start: 898.30s
+End: 900.14s
+Duration: 1.84s
+------------------------------
+Speaker: SPEAKER_00
+Start: 900.50s
+End: 901.76s
+Duration: 1.27s
+------------------------------
+Speaker: SPEAKER_00
+Start: 902.98s
+End: 903.86s
+Duration: 0.88s
+------------------------------
+Speaker: SPEAKER_00
+Start: 904.36s
+End: 905.12s
+Duration: 0.76s
+------------------------------
+Speaker: SPEAKER_00
+Start: 905.49s
+End: 906.62s
+Duration: 1.13s
+------------------------------
+Speaker: SPEAKER_00
+Start: 906.96s
+End: 909.24s
+Duration: 2.28s
+------------------------------
+Speaker: SPEAKER_00
+Start: 909.66s
+End: 911.30s
+Duration: 1.64s
+------------------------------
+Speaker: SPEAKER_00
+Start: 911.75s
+End: 912.82s
+Duration: 1.06s
+------------------------------
+Speaker: SPEAKER_00
+Start: 913.66s
+End: 914.57s
+Duration: 0.91s
+------------------------------
+Speaker: SPEAKER_00
+Start: 915.08s
+End: 916.36s
+Duration: 1.28s
+------------------------------
+Speaker: SPEAKER_00
+Start: 916.44s
+End: 917.95s
+Duration: 1.50s
+------------------------------
+Speaker: SPEAKER_00
+Start: 918.32s
+End: 919.03s
+Duration: 0.71s
+------------------------------
+Speaker: SPEAKER_00
+Start: 919.18s
+End: 920.88s
+Duration: 1.70s
+------------------------------
+Speaker: SPEAKER_00
+Start: 922.22s
+End: 923.58s
+Duration: 1.37s
+------------------------------
+Speaker: SPEAKER_00
+Start: 923.77s
+End: 924.98s
+Duration: 1.22s
+------------------------------
+Speaker: SPEAKER_00
+Start: 925.19s
+End: 926.64s
+Duration: 1.45s
+------------------------------
+Speaker: SPEAKER_00
+Start: 927.45s
+End: 928.88s
+Duration: 1.43s
+------------------------------
+Speaker: SPEAKER_00
+Start: 929.35s
+End: 932.44s
+Duration: 3.09s
+------------------------------
+Speaker: SPEAKER_00
+Start: 932.85s
+End: 933.99s
+Duration: 1.15s
+------------------------------
+Speaker: SPEAKER_00
+Start: 934.48s
+End: 935.60s
+Duration: 1.11s
+------------------------------
+Speaker: SPEAKER_00
+Start: 936.02s
+End: 937.64s
+Duration: 1.62s
+------------------------------
+Speaker: SPEAKER_00
+Start: 937.93s
+End: 938.92s
+Duration: 1.00s
+------------------------------
+Speaker: SPEAKER_00
+Start: 939.60s
+End: 940.37s
+Duration: 0.78s
+------------------------------
+Speaker: SPEAKER_00
+Start: 940.76s
+End: 941.54s
+Duration: 0.78s
+------------------------------
+Speaker: SPEAKER_00
+Start: 942.65s
+End: 943.65s
+Duration: 1.00s
+------------------------------
+Speaker: SPEAKER_00
+Start: 944.15s
+End: 944.88s
+Duration: 0.73s
+------------------------------
+Speaker: SPEAKER_00
+Start: 945.18s
+End: 946.35s
+Duration: 1.16s
+------------------------------
+Speaker: SPEAKER_00
+Start: 946.68s
+End: 948.49s
+Duration: 1.81s
+------------------------------
+Speaker: SPEAKER_00
+Start: 949.05s
+End: 950.52s
+Duration: 1.47s
+------------------------------
+Speaker: SPEAKER_00
+Start: 951.34s
+End: 953.30s
+Duration: 1.96s
+------------------------------
+Speaker: SPEAKER_00
+Start: 954.19s
+End: 955.11s
+Duration: 0.91s
+------------------------------
+Speaker: SPEAKER_00
+Start: 955.63s
+End: 956.83s
+Duration: 1.20s
+------------------------------
+Speaker: SPEAKER_00
+Start: 957.25s
+End: 958.55s
+Duration: 1.30s
+------------------------------
+Speaker: SPEAKER_00
+Start: 959.14s
+End: 961.69s
+Duration: 2.55s
+------------------------------
+Speaker: SPEAKER_00
+Start: 961.99s
+End: 962.99s
+Duration: 1.00s
+------------------------------
+Speaker: SPEAKER_00
+Start: 963.27s
+End: 963.85s
+Duration: 0.57s
+------------------------------
+Speaker: SPEAKER_00
+Start: 964.79s
+End: 965.53s
+Duration: 0.74s
+------------------------------
+Speaker: SPEAKER_00
+Start: 965.57s
+End: 966.73s
+Duration: 1.16s
+------------------------------
+Speaker: SPEAKER_00
+Start: 967.10s
+End: 967.69s
+Duration: 0.59s
+------------------------------
+Speaker: SPEAKER_00
+Start: 968.18s
+End: 969.15s
+Duration: 0.96s
+------------------------------
+Speaker: SPEAKER_00
+Start: 969.84s
+End: 970.55s
+Duration: 0.71s
+------------------------------
+Speaker: SPEAKER_00
+Start: 970.71s
+End: 971.63s
+Duration: 0.91s
+------------------------------
+Speaker: SPEAKER_00
+Start: 972.00s
+End: 972.76s
+Duration: 0.76s
+------------------------------
+Speaker: SPEAKER_00
+Start: 973.20s
+End: 974.55s
+Duration: 1.35s
+------------------------------
+Speaker: SPEAKER_00
+Start: 974.76s
+End: 976.72s
+Duration: 1.96s
+------------------------------
+Speaker: SPEAKER_00
+Start: 977.04s
+End: 980.62s
+Duration: 3.58s
+------------------------------
+Speaker: SPEAKER_00
+Start: 980.87s
+End: 982.27s
+Duration: 1.40s
+------------------------------
+Speaker: SPEAKER_00
+Start: 983.17s
+End: 985.56s
+Duration: 2.40s
+------------------------------
+Speaker: SPEAKER_00
+Start: 986.09s
+End: 987.49s
+Duration: 1.40s
+------------------------------
+Speaker: SPEAKER_00
+Start: 988.06s
+End: 990.00s
+Duration: 1.94s
+------------------------------
+Speaker: SPEAKER_00
+Start: 990.56s
+End: 991.56s
+Duration: 1.00s
+------------------------------
+Speaker: SPEAKER_00
+Start: 992.13s
+End: 994.53s
+Duration: 2.40s
+------------------------------
+Speaker: SPEAKER_00
+Start: 994.96s
+End: 996.40s
+Duration: 1.43s
+------------------------------
+Speaker: SPEAKER_00
+Start: 996.80s
+End: 998.22s
+Duration: 1.42s
+------------------------------
+Speaker: SPEAKER_00
+Start: 998.86s
+End: 1000.03s
+Duration: 1.16s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1000.55s
+End: 1001.38s
+Duration: 0.83s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1001.75s
+End: 1003.82s
+Duration: 2.08s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1003.98s
+End: 1004.80s
+Duration: 0.83s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1005.66s
+End: 1006.96s
+Duration: 1.30s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1007.45s
+End: 1008.89s
+Duration: 1.43s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1009.29s
+End: 1011.45s
+Duration: 2.16s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1011.91s
+End: 1013.16s
+Duration: 1.25s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1013.56s
+End: 1014.81s
+Duration: 1.25s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1015.91s
+End: 1016.41s
+Duration: 0.51s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1016.78s
+End: 1017.88s
+Duration: 1.10s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1018.15s
+End: 1019.62s
+Duration: 1.47s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1020.77s
+End: 1021.66s
+Duration: 0.89s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1021.83s
+End: 1023.65s
+Duration: 1.82s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1024.01s
+End: 1025.09s
+Duration: 1.08s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1025.46s
+End: 1026.71s
+Duration: 1.25s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1027.40s
+End: 1028.53s
+Duration: 1.13s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1028.87s
+End: 1030.69s
+Duration: 1.82s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1031.11s
+End: 1032.56s
+Duration: 1.45s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1033.10s
+End: 1033.64s
+Duration: 0.54s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1033.98s
+End: 1035.60s
+Duration: 1.62s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1036.09s
+End: 1038.54s
+Duration: 2.45s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1039.09s
+End: 1041.84s
+Duration: 2.75s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1042.26s
+End: 1043.55s
+Duration: 1.28s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1044.64s
+End: 1045.49s
+Duration: 0.84s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1046.06s
+End: 1046.70s
+Duration: 0.64s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1047.78s
+End: 1049.44s
+Duration: 1.65s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1050.13s
+End: 1051.04s
+Duration: 0.91s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1051.65s
+End: 1053.86s
+Duration: 2.21s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1054.48s
+End: 1055.93s
+Duration: 1.45s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1056.25s
+End: 1057.35s
+Duration: 1.10s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1057.42s
+End: 1058.84s
+Duration: 1.42s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1059.17s
+End: 1060.29s
+Duration: 1.11s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1061.05s
+End: 1062.90s
+Duration: 1.86s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1063.27s
+End: 1066.50s
+Duration: 3.22s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1066.83s
+End: 1070.24s
+Duration: 3.41s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1071.90s
+End: 1072.93s
+Duration: 1.03s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1073.52s
+End: 1074.51s
+Duration: 1.00s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1074.92s
+End: 1076.66s
+Duration: 1.74s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1077.09s
+End: 1078.02s
+Duration: 0.93s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1078.66s
+End: 1080.89s
+Duration: 2.23s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1082.17s
+End: 1084.50s
+Duration: 2.33s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1085.01s
+End: 1086.36s
+Duration: 1.35s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1086.73s
+End: 1087.73s
+Duration: 1.00s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1088.20s
+End: 1089.04s
+Duration: 0.84s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1089.92s
+End: 1091.83s
+Duration: 1.91s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1092.23s
+End: 1093.80s
+Duration: 1.57s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1094.22s
+End: 1095.56s
+Duration: 1.33s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1095.98s
+End: 1097.43s
+Duration: 1.45s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1097.88s
+End: 1098.51s
+Duration: 0.62s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1099.05s
+End: 1100.62s
+Duration: 1.57s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1101.60s
+End: 1103.22s
+Duration: 1.62s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1103.47s
+End: 1105.34s
+Duration: 1.87s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1105.71s
+End: 1106.95s
+Duration: 1.23s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1107.57s
+End: 1110.10s
+Duration: 2.53s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1110.42s
+End: 1114.15s
+Duration: 3.73s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1114.46s
+End: 1116.18s
+Duration: 1.72s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1116.60s
+End: 1118.84s
+Duration: 2.24s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1119.25s
+End: 1120.29s
+Duration: 1.05s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1120.67s
+End: 1123.62s
+Duration: 2.95s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1124.70s
+End: 1126.10s
+Duration: 1.40s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1126.39s
+End: 1127.31s
+Duration: 0.93s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1127.72s
+End: 1128.68s
+Duration: 0.96s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1129.07s
+End: 1130.30s
+Duration: 1.23s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1131.26s
+End: 1132.43s
+Duration: 1.16s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1132.90s
+End: 1134.54s
+Duration: 1.64s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1134.94s
+End: 1135.75s
+Duration: 0.81s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1135.94s
+End: 1137.42s
+Duration: 1.48s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1137.90s
+End: 1139.16s
+Duration: 1.27s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1139.79s
+End: 1142.01s
+Duration: 2.23s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1142.30s
+End: 1143.14s
+Duration: 0.84s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1143.90s
+End: 1145.84s
+Duration: 1.94s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1146.57s
+End: 1147.50s
+Duration: 0.93s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1148.21s
+End: 1149.05s
+Duration: 0.84s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1149.25s
+End: 1150.74s
+Duration: 1.49s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1151.45s
+End: 1153.37s
+Duration: 1.92s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1153.93s
+End: 1155.16s
+Duration: 1.23s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1155.85s
+End: 1156.69s
+Duration: 0.84s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1157.49s
+End: 1158.60s
+Duration: 1.11s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1159.04s
+End: 1159.93s
+Duration: 0.89s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1160.14s
+End: 1160.78s
+Duration: 0.64s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1161.20s
+End: 1162.43s
+Duration: 1.23s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1163.28s
+End: 1164.27s
+Duration: 1.00s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1164.59s
+End: 1167.93s
+Duration: 3.34s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1168.61s
+End: 1169.28s
+Duration: 0.68s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1169.57s
+End: 1171.14s
+Duration: 1.57s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1172.66s
+End: 1174.28s
+Duration: 1.62s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1174.60s
+End: 1176.03s
+Duration: 1.43s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1176.37s
+End: 1178.09s
+Duration: 1.72s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1179.39s
+End: 1182.51s
+Duration: 3.12s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1182.77s
+End: 1183.85s
+Duration: 1.08s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1184.45s
+End: 1187.12s
+Duration: 2.67s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1187.46s
+End: 1188.91s
+Duration: 1.45s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1189.75s
+End: 1191.02s
+Duration: 1.27s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1191.68s
+End: 1193.26s
+Duration: 1.59s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1196.37s
+End: 1196.89s
+Duration: 0.52s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1197.36s
+End: 1200.18s
+Duration: 2.82s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1200.35s
+End: 1202.37s
+Duration: 2.02s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1203.29s
+End: 1205.61s
+Duration: 2.33s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1206.05s
+End: 1207.40s
+Duration: 1.35s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1207.86s
+End: 1209.24s
+Duration: 1.38s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1209.50s
+End: 1211.17s
+Duration: 1.67s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1211.61s
+End: 1212.58s
+Duration: 0.98s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1213.36s
+End: 1214.52s
+Duration: 1.16s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1215.18s
+End: 1217.24s
+Duration: 2.06s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1217.66s
+End: 1218.88s
+Duration: 1.21s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1219.22s
+End: 1220.92s
+Duration: 1.70s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1221.48s
+End: 1225.71s
+Duration: 4.24s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1226.17s
+End: 1226.69s
+Duration: 0.52s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1227.06s
+End: 1228.68s
+Duration: 1.62s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1229.10s
+End: 1230.00s
+Duration: 0.89s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1230.32s
+End: 1231.05s
+Duration: 0.73s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1232.38s
+End: 1234.45s
+Duration: 2.08s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1234.96s
+End: 1235.92s
+Duration: 0.96s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1236.16s
+End: 1236.72s
+Duration: 0.56s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1237.20s
+End: 1239.03s
+Duration: 1.82s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1239.79s
+End: 1241.98s
+Duration: 2.19s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1242.54s
+End: 1244.26s
+Duration: 1.72s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1244.73s
+End: 1245.64s
+Duration: 0.91s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1246.13s
+End: 1247.09s
+Duration: 0.96s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1247.53s
+End: 1248.53s
+Duration: 1.00s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1249.25s
+End: 1250.28s
+Duration: 1.03s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1250.74s
+End: 1252.09s
+Duration: 1.35s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1252.54s
+End: 1254.72s
+Duration: 2.18s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1255.21s
+End: 1256.53s
+Duration: 1.32s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1257.02s
+End: 1258.74s
+Duration: 1.72s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1259.70s
+End: 1260.54s
+Duration: 0.84s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1261.07s
+End: 1262.30s
+Duration: 1.23s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1262.52s
+End: 1264.26s
+Duration: 1.74s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1264.74s
+End: 1266.69s
+Duration: 1.94s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1267.21s
+End: 1268.39s
+Duration: 1.18s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1268.86s
+End: 1270.58s
+Duration: 1.72s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1271.09s
+End: 1272.56s
+Duration: 1.47s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1272.79s
+End: 1273.82s
+Duration: 1.03s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1274.82s
+End: 1277.03s
+Duration: 2.21s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1277.52s
+End: 1279.71s
+Duration: 2.19s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1280.76s
+End: 1281.67s
+Duration: 0.91s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1282.01s
+End: 1283.12s
+Duration: 1.11s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1283.44s
+End: 1284.62s
+Duration: 1.18s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1285.05s
+End: 1286.26s
+Duration: 1.22s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1287.00s
+End: 1288.10s
+Duration: 1.10s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1289.65s
+End: 1290.41s
+Duration: 0.76s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1290.78s
+End: 1291.78s
+Duration: 1.00s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1292.05s
+End: 1293.01s
+Duration: 0.96s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1293.82s
+End: 1294.68s
+Duration: 0.86s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1295.04s
+End: 1297.14s
+Duration: 2.11s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1297.45s
+End: 1299.25s
+Duration: 1.81s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1299.71s
+End: 1300.64s
+Duration: 0.93s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1301.09s
+End: 1302.53s
+Duration: 1.43s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1303.25s
+End: 1304.13s
+Duration: 0.88s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1304.49s
+End: 1305.40s
+Duration: 0.91s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1305.72s
+End: 1307.03s
+Duration: 1.32s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1307.39s
+End: 1310.00s
+Duration: 2.62s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1310.34s
+End: 1312.03s
+Duration: 1.69s
+------------------------------
+Speaker: SPEAKER_00
+Start: 1312.42s
+End: 1315.18s
+Duration: 2.77s
+------------------------------
+Speaker: SPEAKER_04
+Start: 1316.35s
+End: 1324.55s
+Duration: 8.20s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1327.22s
+End: 1411.59s
+Duration: 84.38s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1412.16s
+End: 1449.31s
+Duration: 37.14s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1450.35s
+End: 1476.00s
+Duration: 25.65s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1476.95s
+End: 1508.30s
+Duration: 31.35s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1508.77s
+End: 1641.66s
+Duration: 132.89s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1642.63s
+End: 1647.98s
+Duration: 5.35s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1648.18s
+End: 1648.97s
+Duration: 0.79s
+------------------------------
+Speaker: SPEAKER_04
+Start: 1648.97s
+End: 1653.11s
+Duration: 4.13s
+------------------------------
+Speaker: SPEAKER_02
+Start: 1654.95s
+End: 1669.26s
+Duration: 14.31s
+------------------------------
+Speaker: SPEAKER_04
+Start: 1668.70s
+End: 1672.60s
+Duration: 3.90s
+------------------------------
+Speaker: SPEAKER_04
+Start: 1674.77s
+End: 1676.31s
+Duration: 1.54s
+------------------------------
+Speaker: SPEAKER_02
+Start: 1676.48s
+End: 1684.36s
+Duration: 7.88s
+------------------------------
+Speaker: SPEAKER_02
+Start: 1684.78s
+End: 1697.23s
+Duration: 12.45s
+------------------------------
+Speaker: SPEAKER_02
+Start: 1697.99s
+End: 1711.04s
+Duration: 13.04s
+------------------------------
+Speaker: SPEAKER_02
+Start: 1711.56s
+End: 1717.53s
+Duration: 5.97s
+------------------------------
+Speaker: SPEAKER_02
+Start: 1717.92s
+End: 1724.93s
+Duration: 7.00s
+------------------------------
+Speaker: SPEAKER_02
+Start: 1725.84s
+End: 1733.89s
+Duration: 8.05s
+------------------------------
+Speaker: SPEAKER_02
+Start: 1734.41s
+End: 1744.52s
+Duration: 10.11s
+------------------------------
+Speaker: SPEAKER_02
+Start: 1746.21s
+End: 1798.86s
+Duration: 52.65s
+------------------------------
+Speaker: SPEAKER_02
+Start: 1799.21s
+End: 1799.97s
+Duration: 0.76s
+------------------------------
+
+
+SPEAKER DIARIZATION RESULTS
+========================================
+
+Speaker: SPEAKER_01
+Start: 0.03s
+End: 26.44s
+Duration: 26.41s
+------------------------------
+Speaker: SPEAKER_05
+Start: 27.10s
+End: 34.64s
+Duration: 7.54s
+------------------------------
+Speaker: SPEAKER_04
+Start: 37.92s
+End: 104.13s
+Duration: 66.22s
+------------------------------
+Speaker: SPEAKER_04
+Start: 104.91s
+End: 106.36s
+Duration: 1.45s
+------------------------------
+Speaker: SPEAKER_05
+Start: 107.49s
+End: 110.11s
+Duration: 2.62s
+------------------------------
+Speaker: SPEAKER_05
+Start: 110.46s
+End: 126.41s
+Duration: 15.95s
+------------------------------
+Speaker: SPEAKER_07
+Start: 130.02s
+End: 153.91s
+Duration: 23.90s
+------------------------------
+Speaker: SPEAKER_07
+Start: 154.32s
+End: 163.77s
+Duration: 9.45s
+------------------------------
+Speaker: SPEAKER_07
+Start: 164.06s
+End: 184.76s
+Duration: 20.71s
+------------------------------
+Speaker: SPEAKER_07
+Start: 185.37s
+End: 203.73s
+Duration: 18.36s
+------------------------------
+Speaker: SPEAKER_07
+Start: 203.81s
+End: 212.98s
+Duration: 9.16s
+------------------------------
+Speaker: SPEAKER_07
+Start: 213.55s
+End: 251.35s
+Duration: 37.80s
+------------------------------
+Speaker: SPEAKER_07
+Start: 251.62s
+End: 253.11s
+Duration: 1.48s
+------------------------------
+Speaker: SPEAKER_07
+Start: 253.41s
+End: 265.41s
+Duration: 12.00s
+------------------------------
+Speaker: SPEAKER_07
+Start: 265.64s
+End: 295.31s
+Duration: 29.67s
+------------------------------
+Speaker: SPEAKER_07
+Start: 295.65s
+End: 329.79s
+Duration: 34.14s
+------------------------------
+Speaker: SPEAKER_07
+Start: 330.70s
+End: 332.30s
+Duration: 1.60s
+------------------------------
+Speaker: SPEAKER_07
+Start: 332.47s
+End: 351.18s
+Duration: 18.71s
+------------------------------
+Speaker: SPEAKER_07
+Start: 351.44s
+End: 358.98s
+Duration: 7.54s
+------------------------------
+Speaker: SPEAKER_07
+Start: 359.40s
+End: 399.78s
+Duration: 40.38s
+------------------------------
+Speaker: SPEAKER_07
+Start: 400.05s
+End: 414.55s
+Duration: 14.50s
+------------------------------
+Speaker: SPEAKER_07
+Start: 415.39s
+End: 416.93s
+Duration: 1.54s
+------------------------------
+Speaker: SPEAKER_05
+Start: 415.68s
+End: 416.24s
+Duration: 0.56s
+------------------------------
+Speaker: SPEAKER_05
+Start: 417.38s
+End: 435.24s
+Duration: 17.85s
+------------------------------
+Speaker: SPEAKER_02
+Start: 437.45s
+End: 455.77s
+Duration: 18.33s
+------------------------------
+Speaker: SPEAKER_02
+Start: 456.75s
+End: 489.84s
+Duration: 33.09s
+------------------------------
+Speaker: SPEAKER_05
+Start: 491.03s
+End: 491.82s
+Duration: 0.79s
+------------------------------
+Speaker: SPEAKER_08
+Start: 493.32s
+End: 511.98s
+Duration: 18.66s
+------------------------------
+Speaker: SPEAKER_08
+Start: 512.36s
+End: 605.81s
+Duration: 93.45s
+------------------------------
+Speaker: SPEAKER_08
+Start: 606.70s
+End: 690.71s
+Duration: 84.00s
+------------------------------
+Speaker: SPEAKER_08
+Start: 691.74s
+End: 785.83s
+Duration: 94.10s
+------------------------------
+Speaker: SPEAKER_05
+Start: 786.36s
+End: 821.08s
+Duration: 34.73s
+------------------------------
+Speaker: SPEAKER_00
+Start: 822.42s
+End: 860.25s
+Duration: 37.83s
+------------------------------
+Speaker: SPEAKER_00
+Start: 860.50s
+End: 968.39s
+Duration: 107.88s
+------------------------------
+Speaker: SPEAKER_00
+Start: 968.98s
+End: 992.87s
+Duration: 23.89s
+------------------------------
+Speaker: SPEAKER_05
+Start: 993.46s
+End: 1000.04s
+Duration: 6.58s
+------------------------------
+Speaker: SPEAKER_06
+Start: 1007.35s
+End: 1171.75s
+Duration: 164.40s
+------------------------------
+Speaker: SPEAKER_06
+Start: 1173.72s
+End: 1174.85s
+Duration: 1.13s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1174.85s
+End: 1176.22s
+Duration: 1.37s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1177.16s
+End: 1194.16s
+Duration: 16.99s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1194.27s
+End: 1194.90s
+Duration: 0.62s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1196.52s
+End: 1203.22s
+Duration: 6.70s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1203.96s
+End: 1205.77s
+Duration: 1.81s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1206.46s
+End: 1212.87s
+Duration: 6.41s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1212.97s
+End: 1225.54s
+Duration: 12.57s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1225.98s
+End: 1229.76s
+Duration: 3.78s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1230.17s
+End: 1233.85s
+Duration: 3.68s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1234.61s
+End: 1235.43s
+Duration: 0.83s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1235.87s
+End: 1248.85s
+Duration: 12.98s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1249.00s
+End: 1254.54s
+Duration: 5.53s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1255.02s
+End: 1262.69s
+Duration: 7.66s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1263.14s
+End: 1264.29s
+Duration: 1.15s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1265.15s
+End: 1274.99s
+Duration: 9.84s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1275.63s
+End: 1276.44s
+Duration: 0.81s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1276.91s
+End: 1279.44s
+Duration: 2.53s
+------------------------------
+Speaker: SPEAKER_03
+Start: 1279.73s
+End: 1303.07s
+Duration: 23.34s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1304.35s
+End: 1314.56s
+Duration: 10.21s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1314.76s
+End: 1323.49s
+Duration: 8.72s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1324.18s
+End: 1389.55s
+Duration: 65.37s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1390.11s
+End: 1435.42s
+Duration: 45.31s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1436.41s
+End: 1474.35s
+Duration: 37.93s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1475.40s
+End: 1488.88s
+Duration: 13.48s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1489.08s
+End: 1500.44s
+Duration: 11.36s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1500.81s
+End: 1531.57s
+Duration: 30.76s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1532.53s
+End: 1541.09s
+Duration: 8.56s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1541.65s
+End: 1583.55s
+Duration: 41.90s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1584.10s
+End: 1602.09s
+Duration: 17.99s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1602.51s
+End: 1650.49s
+Duration: 47.98s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1650.96s
+End: 1669.49s
+Duration: 18.53s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1670.08s
+End: 1674.22s
+Duration: 4.13s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1674.82s
+End: 1677.09s
+Duration: 2.26s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1677.42s
+End: 1725.84s
+Duration: 48.41s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1726.14s
+End: 1733.50s
+Duration: 7.36s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1733.55s
+End: 1747.64s
+Duration: 14.09s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1748.04s
+End: 1792.16s
+Duration: 44.11s
+------------------------------
+Speaker: SPEAKER_05
+Start: 1793.54s
+End: 1799.48s
+Duration: 5.94s
+------------------------------
+
+
+SPEAKER DIARIZATION RESULTS
+========================================
+
+Speaker: SPEAKER_00
+Start: 0.03s
+End: 24.97s
+Duration: 24.94s
+------------------------------
+Speaker: SPEAKER_00
+Start: 25.55s
+End: 48.55s
+Duration: 23.00s
+------------------------------
+Speaker: SPEAKER_00
+Start: 49.39s
+End: 51.97s
+Duration: 2.58s
+------------------------------
+Speaker: SPEAKER_00
+Start: 52.16s
+End: 54.49s
+Duration: 2.33s
+------------------------------
