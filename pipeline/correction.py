@@ -128,8 +128,8 @@ def correct_text(input_text, correction_model, correction_tokenizer):
         return input_text, False
 
 
-def test_correction(input_txt_path, output_txt_path):
-    """Test text correction model on summarization results.
+def perform_correction(input_txt_path, output_txt_path):
+    """Perform text correction on summarization results.
     
     Args:
         input_txt_path: Path to input text file with summarization results
@@ -182,4 +182,4 @@ def test_correction(input_txt_path, output_txt_path):
 
 
 if __name__ == "__main__":
-    result_dataframe = test_correction("summarization.txt", "test_correction.txt")
+    result_dataframe = perform_correction("summarization.txt", "correction_output.txt")

@@ -4,13 +4,24 @@ import sys
 import shutil
 from pathlib import Path
 
+# Support both module execution (python -m pipeline.pipeline) and direct execution
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from test_diarization import perform_diarization
-from test_asr import perform_speech_recognition
-from test_correction import test_correction
-from test_summarization import test_summarization
-from speaker_clustering import SpeakerClustering
+try:
+    # When running as module: python -m pipeline.pipeline
+    from pipeline.diarization import perform_diarization
+    from pipeline.asr import perform_speech_recognition
+    from pipeline.correction import perform_correction
+    from pipeline.summarization import perform_summarization
+    from pipeline.speaker_clustering import SpeakerClustering
+except ImportError:
+    # When running directly: python pipeline.py
+    from diarization import perform_diarization
+    from asr import perform_speech_recognition
+    from correction import perform_correction
+    from summarization import perform_summarization
+    from speaker_clustering import SpeakerClustering
+
 from utils.config import ModelConfig
 
 
@@ -36,7 +47,7 @@ def run_complete_pipeline(audio_file_path, output_dir):
     ensure_directory(output_dir)
     
     print("=" * 60)
-    print("STARTING COMPLETE PIPELINE TEST")
+    print("STARTING MEETING TRANSCRIPTION PIPELINE")
     print("=" * 60)
     
     # Define output file paths
@@ -67,7 +78,7 @@ def run_complete_pipeline(audio_file_path, output_dir):
     
     # 3. Summarization
     print("\n3. SUMMARIZATION STAGE")
-    summarization_dataframe = test_summarization(asr_output_path, summarization_output_path)
+    summarization_dataframe = perform_summarization(asr_output_path, summarization_output_path)
     
     if summarization_dataframe.empty:
         print("Summarization failed - stopping pipeline")
@@ -75,7 +86,7 @@ def run_complete_pipeline(audio_file_path, output_dir):
     
     # 4. Correction
     print("\n4. CORRECTION STAGE (Summarization Correction)")
-    correction_dataframe = test_correction(summarization_output_path, correction_output_path)
+    correction_dataframe = perform_correction(summarization_output_path, correction_output_path)
     
     print("\n" + "=" * 60)
     print("PIPELINE COMPLETED SUCCESSFULLY")
@@ -104,12 +115,13 @@ def get_audio_duration(audio_file_path):
     return len(audio) / (60 * 1000)
 
 
-def process_audio_file(audio_file_path, base_output_dir="pipeline_output"):
+def process_audio_file(audio_file_path, base_output_dir="pipeline_output", force_clustering=False):
     """Process single audio file with automatic chunking if needed.
     
     Args:
         audio_file_path: Path to audio file
         base_output_dir: Base directory for outputs
+        force_clustering: Force speaker clustering even for short files
         
     Returns:
         bool: True if processing completed successfully
@@ -125,9 +137,91 @@ def process_audio_file(audio_file_path, base_output_dir="pipeline_output"):
     if duration_minutes > ModelConfig.MAX_CHUNK_DURATION:
         print("File is long - processing with speaker clustering...")
         return process_long_audio_with_clustering(audio_file_path, base_output_dir)
+    elif force_clustering:
+        print("Force clustering enabled - processing with speaker analysis...")
+        return process_with_speaker_analysis(audio_file_path, base_output_dir)
     else:
         print("File is short - processing as single file...")
         return run_complete_pipeline(audio_file_path, output_dir)
+
+
+def process_with_speaker_analysis(audio_file_path, base_output_dir="pipeline_output"):
+    """Process audio file with speaker embedding analysis and visualization.
+    
+    This function processes the audio normally and additionally extracts
+    speaker embeddings to generate clustering visualization and quality metrics.
+    
+    Args:
+        audio_file_path: Path to input audio file
+        base_output_dir: Base directory for all outputs
+        
+    Returns:
+        bool: True if processing completed successfully
+    """
+    audio_filename = Path(audio_file_path).stem
+    output_dir = os.path.join(base_output_dir, audio_filename)
+    ensure_directory(output_dir)
+    
+    # First, run the normal pipeline
+    success = run_complete_pipeline(audio_file_path, output_dir)
+    
+    if not success:
+        return False
+    
+    # Then extract speaker embeddings and generate visualization
+    print("\n" + "=" * 60)
+    print("SPEAKER ANALYSIS STAGE")
+    print("=" * 60)
+    
+    try:
+        speaker_clustering = SpeakerClustering(ModelConfig.DIARIZATION_TOKEN)
+        
+        # Extract per-segment embeddings for proper metrics calculation
+        print("Extracting segment embeddings for analysis...")
+        embeddings, labels, label_to_speaker = speaker_clustering.extract_segment_embeddings(audio_file_path)
+        
+        if embeddings is None or len(embeddings) == 0:
+            print("No embeddings extracted - skipping visualization")
+            return True
+        
+        n_speakers = len(set(labels))
+        n_segments = len(labels)
+        
+        print(f"Found {n_segments} segments from {n_speakers} speakers")
+        
+        if n_speakers < 2:
+            print("Only one speaker detected - skipping clustering analysis")
+            return True
+        
+        # Calculate clustering quality metrics using segment-level embeddings
+        # This measures how well segments from the same speaker cluster together
+        speaker_clustering.calculate_clustering_metrics(embeddings, labels, output_dir)
+        
+        # For visualization, also get averaged embeddings per speaker
+        speaker_embeddings = speaker_clustering.extract_speaker_embeddings(audio_file_path)
+        
+        if speaker_embeddings and len(speaker_embeddings) >= 3:
+            # Create speaker data structure for visualization
+            all_speaker_data = {audio_file_path: speaker_embeddings}
+            
+            # Generate speaker mapping
+            speaker_mapping = {}
+            for i, speaker in enumerate(speaker_embeddings.keys()):
+                speaker_mapping[(audio_file_path, speaker)] = f"speaker_{i:02d}"
+            
+            speaker_clustering.visualize_clusters(all_speaker_data, speaker_mapping, output_dir)
+        else:
+            print(f"Only {n_speakers} speakers detected - need at least 3 for visualization")
+        
+        print("Speaker analysis completed")
+        return True
+        
+    except Exception as e:
+        print(f"Error in speaker analysis: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return True because the main pipeline succeeded
+        return True
 
 
 def process_long_audio_with_clustering(audio_file_path, base_output_dir="pipeline_output"):
@@ -233,8 +327,8 @@ def process_long_audio_with_clustering(audio_file_path, base_output_dir="pipelin
         summarization_output_path = os.path.join(final_output_dir, f"{audio_filename}_summarization.txt")
         correction_output_path = os.path.join(final_output_dir, f"{audio_filename}_correction.txt")
         
-        test_summarization(combined_asr_path, summarization_output_path)
-        test_correction(summarization_output_path, correction_output_path)
+        perform_summarization(combined_asr_path, summarization_output_path)
+        perform_correction(summarization_output_path, correction_output_path)
         
         print(f"Final results with global speaker IDs saved to {final_output_dir}")
         return True
@@ -259,14 +353,22 @@ def process_long_audio_with_clustering(audio_file_path, base_output_dir="pipelin
                 shutil.rmtree(chunk_dir)
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Run audio processing pipeline')
+def main():
+    """Main entry point for the pipeline."""
+    parser = argparse.ArgumentParser(
+        description='Offline meeting transcription pipeline: diarization, ASR, summarization, and correction'
+    )
     parser.add_argument('--audio-file', type=str, help='Process specific audio file from audio_test folder')
+    parser.add_argument('--force-clustering', action='store_true', 
+                        help='Force speaker clustering analysis even for short files (generates visualization and metrics)')
     
     args = parser.parse_args()
     
     audio_test_dir = "audio_test"
     base_output_dir = "pipeline_output"
+    
+    if args.force_clustering:
+        print("Force clustering mode enabled - will generate speaker visualization and metrics")
     
     if args.audio_file:
         # Process specific file
@@ -276,7 +378,7 @@ if __name__ == "__main__":
             print(f"File {input_audio_file} not found!")
             sys.exit(1)
             
-        result = process_audio_file(input_audio_file, base_output_dir)
+        result = process_audio_file(input_audio_file, base_output_dir, args.force_clustering)
         
         if result:
             print(f"✓ Successfully processed {args.audio_file}")
@@ -302,9 +404,13 @@ if __name__ == "__main__":
             print(f"PROCESSING: {input_audio_file}")
             print(f"{'='*60}")
             
-            result = process_audio_file(input_audio_file, base_output_dir)
+            result = process_audio_file(input_audio_file, base_output_dir, args.force_clustering)
             
             if result:
                 print(f"✓ Successfully processed {audio_file}")
             else:
                 print(f"✗ Failed to process {audio_file}")
+
+
+if __name__ == "__main__":
+    main()

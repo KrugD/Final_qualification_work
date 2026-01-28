@@ -223,4 +223,4 @@ def perform_speech_recognition(audio_file_path, diarization_txt_path, output_txt
 
 if __name__ == "__main__":
     audio_file = "1.wav"
-    dataframe = perform_speech_recognition(audio_file, "diarization.txt", "test_asr.txt")
+    dataframe = perform_speech_recognition(audio_file, "diarization.txt", "asr_output.txt")

@@ -103,8 +103,8 @@ def summarize_text(input_text, summarization_model, summarization_tokenizer):
         return input_text[:200] + "...", False
 
 
-def test_summarization(input_txt_path, output_txt_path):
-    """Test text summarization model on ASR results.
+def perform_summarization(input_txt_path, output_txt_path):
+    """Perform text summarization on ASR results.
     
     Args:
         input_txt_path: Path to input text file with ASR results
@@ -199,5 +199,5 @@ def create_meeting_minutes(summary_txt_path, output_file_path):
 
 
 if __name__ == "__main__":
-    result_dataframe = test_summarization("asr.txt", "test_summarization.txt")
-    create_meeting_minutes("test_summarization.txt", "test_meeting_minutes.txt")
+    result_dataframe = perform_summarization("asr.txt", "summarization_output.txt")
+    create_meeting_minutes("summarization_output.txt", "meeting_minutes.txt")

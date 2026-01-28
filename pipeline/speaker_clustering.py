@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.decomposition import PCA
+from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
 from pyannote.audio import Pipeline, Model, Inference
 from pyannote.core import Segment
 import tempfile
@@ -205,6 +206,64 @@ class SpeakerClustering:
             traceback.print_exc()
             return {}
 
+    def extract_segment_embeddings(self, audio_file_path):
+        """Extract per-segment speaker embeddings for metrics calculation.
+        
+        Unlike extract_speaker_embeddings which returns averaged embeddings per speaker,
+        this method returns individual embeddings for each speech segment.
+        
+        Args:
+            audio_file_path: Path to audio file
+            
+        Returns:
+            tuple: (embeddings_array, speaker_labels, speaker_names)
+                - embeddings_array: numpy array of shape (n_segments, embedding_dim)
+                - speaker_labels: numpy array of integer labels for each segment
+                - speaker_names: dict mapping label to speaker name
+        """
+        try:
+            print(f"Extracting segment embeddings for {os.path.basename(audio_file_path)}")
+            diarization = self.diarization_pipeline(audio_file_path)
+            
+            all_embeddings = []
+            all_labels = []
+            speaker_to_label = {}
+            label_counter = 0
+            
+            if hasattr(diarization, 'speaker_diarization'):
+                for segment, track, speaker in diarization.speaker_diarization.itertracks(yield_label=True):
+                    if segment.end - segment.start < 1.0:
+                        continue
+                    
+                    try:
+                        embedding = self.embedding_inference.crop(audio_file_path, segment)
+                        
+                        if speaker not in speaker_to_label:
+                            speaker_to_label[speaker] = label_counter
+                            label_counter += 1
+                        
+                        all_embeddings.append(embedding)
+                        all_labels.append(speaker_to_label[speaker])
+                        
+                    except Exception as e:
+                        continue
+            
+            if not all_embeddings:
+                return None, None, None
+            
+            embeddings_array = np.vstack(all_embeddings)
+            labels_array = np.array(all_labels)
+            label_to_speaker = {v: k for k, v in speaker_to_label.items()}
+            
+            print(f"Extracted {len(all_embeddings)} segment embeddings for {len(speaker_to_label)} speakers")
+            return embeddings_array, labels_array, label_to_speaker
+            
+        except Exception as e:
+            print(f"Error extracting segment embeddings: {e}")
+            import traceback
+            traceback.print_exc()
+            return None, None, None
+
     def cluster_speakers(self, all_speaker_data, distance_threshold=None, output_dir=None):
         """Cluster speakers across all chunks."""
 
@@ -261,12 +320,190 @@ class SpeakerClustering:
             global_speaker_id = f"speaker_{cluster_labels[i]:02d}"
             speaker_mapping[(info['chunk_path'], info['local_speaker'])] = global_speaker_id
         
+        # Calculate clustering quality metrics
+        clustering_metrics = self.calculate_clustering_metrics(X, cluster_labels, output_dir)
+        
         # Add visualization if output directory provided and enough data
         if output_dir and len(embeddings) >= 3:
             self.visualize_clusters(all_speaker_data, speaker_mapping, output_dir)
 
         print(f"Clustered {len(speaker_info)} local speakers into {len(set(cluster_labels))} global speakers")
         return speaker_mapping
+
+    def calculate_clustering_metrics(self, embeddings, cluster_labels, output_dir=None):
+        """Calculate clustering quality metrics.
+        
+        Args:
+            embeddings: Numpy array of speaker embeddings
+            cluster_labels: Cluster labels from clustering algorithm
+            output_dir: Optional output directory for saving metrics report
+            
+        Returns:
+            dict: Dictionary with clustering quality metrics
+        """
+        metrics = {}
+        n_clusters = len(set(cluster_labels))
+        n_samples = len(cluster_labels)
+        
+        print("\n" + "=" * 50)
+        print("CLUSTERING QUALITY METRICS")
+        print("=" * 50)
+        
+        # Need at least 2 clusters and more samples than clusters for valid metrics
+        if n_clusters >= 2 and n_samples > n_clusters:
+            try:
+                # Silhouette Score: measures how similar points are to their own cluster
+                # Range: [-1, 1], higher is better
+                silhouette = silhouette_score(embeddings, cluster_labels, metric='cosine')
+                metrics['silhouette_score'] = silhouette
+                print(f"Silhouette Score: {silhouette:.4f}")
+                print(f"  (Range: -1 to 1, higher is better)")
+                print(f"  Interpretation: ", end="")
+                if silhouette > 0.7:
+                    print("Excellent cluster separation")
+                elif silhouette > 0.5:
+                    print("Good cluster separation")
+                elif silhouette > 0.25:
+                    print("Moderate cluster separation")
+                else:
+                    print("Weak cluster separation")
+                    
+            except Exception as e:
+                print(f"Could not calculate Silhouette Score: {e}")
+                metrics['silhouette_score'] = None
+            
+            try:
+                # Calinski-Harabasz Index: ratio of between-cluster to within-cluster dispersion
+                # Higher is better, no fixed range
+                calinski_harabasz = calinski_harabasz_score(embeddings, cluster_labels)
+                metrics['calinski_harabasz_index'] = calinski_harabasz
+                print(f"\nCalinski-Harabasz Index: {calinski_harabasz:.4f}")
+                print(f"  (Higher is better, no fixed range)")
+                
+            except Exception as e:
+                print(f"Could not calculate Calinski-Harabasz Index: {e}")
+                metrics['calinski_harabasz_index'] = None
+            
+            try:
+                # Davies-Bouldin Index: average similarity between clusters
+                # Range: [0, inf), lower is better
+                davies_bouldin = davies_bouldin_score(embeddings, cluster_labels)
+                metrics['davies_bouldin_index'] = davies_bouldin
+                print(f"\nDavies-Bouldin Index: {davies_bouldin:.4f}")
+                print(f"  (Range: 0 to inf, lower is better)")
+                print(f"  Interpretation: ", end="")
+                if davies_bouldin < 0.5:
+                    print("Excellent cluster separation")
+                elif davies_bouldin < 1.0:
+                    print("Good cluster separation")
+                elif davies_bouldin < 1.5:
+                    print("Moderate cluster separation")
+                else:
+                    print("Weak cluster separation")
+                    
+            except Exception as e:
+                print(f"Could not calculate Davies-Bouldin Index: {e}")
+                metrics['davies_bouldin_index'] = None
+                
+        else:
+            print(f"Insufficient data for clustering metrics calculation")
+            print(f"  Clusters: {n_clusters}, Samples: {n_samples}")
+            print(f"  Need at least 2 clusters and more samples than clusters")
+            metrics['silhouette_score'] = None
+            metrics['calinski_harabasz_index'] = None
+            metrics['davies_bouldin_index'] = None
+        
+        # Add basic statistics
+        metrics['n_clusters'] = n_clusters
+        metrics['n_samples'] = n_samples
+        
+        print(f"\nClustering Summary:")
+        print(f"  Total speaker segments: {n_samples}")
+        print(f"  Global speakers identified: {n_clusters}")
+        print("=" * 50)
+        
+        # Save metrics to file if output directory provided
+        if output_dir:
+            self.save_clustering_metrics(metrics, output_dir)
+        
+        return metrics
+
+    def save_clustering_metrics(self, metrics, output_dir):
+        """Save clustering metrics to a text file.
+        
+        Args:
+            metrics: Dictionary with clustering quality metrics
+            output_dir: Output directory for the report
+        """
+        metrics_path = os.path.join(output_dir, "clustering_metrics_report.txt")
+        
+        with open(metrics_path, 'w', encoding='utf-8') as f:
+            f.write("SPEAKER CLUSTERING QUALITY METRICS REPORT\n")
+            f.write("=" * 60 + "\n\n")
+            
+            f.write("CLUSTERING SUMMARY\n")
+            f.write("-" * 40 + "\n")
+            f.write(f"Total speaker segments analyzed: {metrics.get('n_samples', 'N/A')}\n")
+            f.write(f"Global speakers identified: {metrics.get('n_clusters', 'N/A')}\n\n")
+            
+            f.write("QUALITY METRICS\n")
+            f.write("-" * 40 + "\n\n")
+            
+            # Silhouette Score
+            silhouette = metrics.get('silhouette_score')
+            f.write("1. Silhouette Score\n")
+            f.write("   Description: Measures how similar points are to their own cluster\n")
+            f.write("   Range: -1 to 1 (higher is better)\n")
+            if silhouette is not None:
+                f.write(f"   Value: {silhouette:.4f}\n")
+                if silhouette > 0.7:
+                    f.write("   Interpretation: Excellent cluster separation\n")
+                elif silhouette > 0.5:
+                    f.write("   Interpretation: Good cluster separation\n")
+                elif silhouette > 0.25:
+                    f.write("   Interpretation: Moderate cluster separation\n")
+                else:
+                    f.write("   Interpretation: Weak cluster separation\n")
+            else:
+                f.write("   Value: Could not be calculated\n")
+            f.write("\n")
+            
+            # Calinski-Harabasz Index
+            calinski = metrics.get('calinski_harabasz_index')
+            f.write("2. Calinski-Harabasz Index\n")
+            f.write("   Description: Ratio of between-cluster to within-cluster dispersion\n")
+            f.write("   Range: 0 to infinity (higher is better)\n")
+            if calinski is not None:
+                f.write(f"   Value: {calinski:.4f}\n")
+            else:
+                f.write("   Value: Could not be calculated\n")
+            f.write("\n")
+            
+            # Davies-Bouldin Index
+            davies = metrics.get('davies_bouldin_index')
+            f.write("3. Davies-Bouldin Index\n")
+            f.write("   Description: Average similarity between clusters\n")
+            f.write("   Range: 0 to infinity (lower is better)\n")
+            if davies is not None:
+                f.write(f"   Value: {davies:.4f}\n")
+                if davies < 0.5:
+                    f.write("   Interpretation: Excellent cluster separation\n")
+                elif davies < 1.0:
+                    f.write("   Interpretation: Good cluster separation\n")
+                elif davies < 1.5:
+                    f.write("   Interpretation: Moderate cluster separation\n")
+                else:
+                    f.write("   Interpretation: Weak cluster separation\n")
+            else:
+                f.write("   Value: Could not be calculated\n")
+            f.write("\n")
+            
+            f.write("=" * 60 + "\n")
+            f.write("Note: Silhouette Score is the primary metric for evaluating\n")
+            f.write("speaker clustering quality. Values above 0.5 indicate good\n")
+            f.write("separation between speakers.\n")
+        
+        print(f"Clustering metrics report saved: {metrics_path}")
 
     def visualize_clusters(self, all_speaker_data, speaker_mapping, output_dir):
         """Visualization of speaker clusters with correct labeling."""
