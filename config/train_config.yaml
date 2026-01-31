@@ -1,0 +1,117 @@
+# Configuration for Masked Diffusion Summarization Model Training
+# Based on approaches from LLaDA and Arg-LLaDA papers
+
+# Random seed for reproducibility
+seed: 42
+
+# Model configuration
+model:
+  # Pretrained encoder model (Russian T5)
+  encoder: "ai-forever/ruT5-base"
+  
+  # Number of decoder layers
+  num_decoder_layers: 6
+  
+  # Number of diffusion steps for inference
+  num_diffusion_steps: 20
+  
+  # Dropout rate
+  dropout: 0.1
+  
+  # Noise schedule type: "cosine", "linear", or "sqrt"
+  schedule_type: "cosine"
+  
+  # Semantic-Aware Noising (from NAACL 2025 paper)
+  # Uses attention scores to determine token importance
+  use_semantic_noise: true
+  
+  # Weight for similarity loss between source and target [CLS] tokens
+  # From NAACL 2025 paper: Lcls = 1 - cos(Cs, Ct)
+  similarity_loss_weight: 0.1
+  
+  # Decoder type: "mamba" (CrossMamba from NAACL 2025) or "transformer" (fallback)
+  decoder_type: "mamba"
+  
+  # Mamba-specific parameters
+  mamba_state_size: 16      # SSM state dimension
+  mamba_conv_kernel: 4      # Causal convolution kernel size
+  mamba_expand_factor: 2    # Expansion factor for inner dimension
+
+# Training configuration
+training:
+  # Batch size per device
+  batch_size: 8
+  
+  # Gradient accumulation steps (effective batch = batch_size * gradient_accumulation_steps * num_gpus)
+  gradient_accumulation_steps: 4
+  
+  # Learning rate
+  learning_rate: 5.0e-5
+  
+  # Weight decay for AdamW
+  weight_decay: 0.01
+  
+  # Number of training epochs
+  num_epochs: 10
+  
+  # Warmup steps for learning rate scheduler
+  warmup_steps: 1000
+  
+  # Maximum gradient norm for clipping
+  max_grad_norm: 1.0
+  
+  # Mixed precision training: "no", "fp16", or "bf16"
+  mixed_precision: "fp16"
+  
+  # Output directory for checkpoints
+  output_dir: "checkpoints"
+
+# Data configuration
+data:
+  # HuggingFace dataset name
+  dataset: "RussianNLP/Mixed-Summarization-Dataset"
+  
+  # Maximum source sequence length
+  max_source_length: 512
+  
+  # Maximum target sequence length
+  max_target_length: 128
+  
+  # Number of dataloader workers
+  num_workers: 4
+  
+  # Optional cache directory for dataset
+  cache_dir: null
+  
+  # Optional: limit training data size (for debugging)
+  # train_subset_size: 10000
+
+# Logging configuration
+logging:
+  # CometML project name
+  comet_project: "diffusion-summarization"
+  
+  # Optional experiment name (auto-generated if not provided)
+  experiment_name: null
+  
+  # Tags for the experiment
+  tags:
+    - "diffusion"
+    - "summarization"
+    - "russian"
+    - "ruT5"
+  
+  # Log training metrics every N steps
+  log_every_n_steps: 100
+  
+  # Save checkpoint every N steps
+  save_every_n_steps: 5000
+  
+  # Evaluate every N steps
+  eval_every_n_steps: 2000
+  
+  # Disable CometML logging (for debugging)
+  disable_comet: false
+
+# Logging level
+log_level: "INFO"
