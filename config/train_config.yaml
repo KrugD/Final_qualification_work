@@ -1,5 +1,5 @@
 # Configuration for Masked Diffusion Summarization Model Training
-# Based on approaches from LLaDA and Arg-LLaDA papers
+# Based on: "Discrete Diffusion Language Model for Efficient Text Summarization" (NAACL 2025)
 
 # Random seed for reproducibility
 seed: 42

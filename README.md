@@ -1,10 +1,10 @@
 # Masked Diffusion Language Model for Russian Text Summarization
 
-This project implements a **Masked Diffusion Language Model** for abstractive text summarization in Russian, based on approaches from:
+This project implements a **Masked Diffusion Language Model** for abstractive text summarization in Russian, based on:
 
-- **Discrete Diffusion Language Model for Summarization** (NAACL 2025)
-- **LLaDA**: Large Language Diffusion Models (Nie et al., 2025)
-- **Arg-LLaDA**: Argument Summarization via Large Language Diffusion Models
+- **[Discrete Diffusion Language Model for Efficient Text Summarization](https://arxiv.org/pdf/2407.10998)** (NAACL 2025)
+  - Authors: Do Huu Dat, Do Duc Anh, Anh Tuan Luu, Wray Buntine
+  - VinUniversity, Nanyang Technological University
 
 ## Architecture
 
@@ -335,18 +335,23 @@ MIT License
 
 ## References
 
-```bibtex
-@article{nie2025llada,
-  title={Large Language Diffusion Models},
-  author={Nie, Shen and others},
-  journal={arXiv preprint arXiv:2502.09992},
-  year={2025}
-}
+This implementation is based on the following paper:
 
-@article{li2025argllada,
-  title={Arg-LLaDA: Argument Summarization via Large Language Diffusion Models},
-  author={Li, Hao and others},
-  journal={arXiv preprint arXiv:2507.19081},
+**Discrete Diffusion Language Model for Efficient Text Summarization** (NAACL 2025)
+- Authors: Do Huu Dat, Do Duc Anh, Anh Tuan Luu, Wray Buntine
+- VinUniversity, Nanyang Technological University
+- Paper: [arXiv:2407.10998](https://arxiv.org/abs/2407.10998)
+
+Key contributions used in this implementation:
+- **Semantic-Aware Noising Process** (Section 3.4, Eq. 3) — important tokens masked later
+- **CrossMamba Decoder** (Section 3.5) — Mamba-based encoder-decoder with O(n) complexity
+- **Similarity Loss** (Eq. 4) — aligns source and target semantic representations
+
+```bibtex
+@article{dat2025discrete,
+  title={Discrete Diffusion Language Model for Efficient Text Summarization},
+  author={Do, Huu Dat and Do, Duc Anh and Luu, Anh Tuan and Buntine, Wray},
+  journal={arXiv preprint arXiv:2407.10998},
   year={2025}
 }
 ```
