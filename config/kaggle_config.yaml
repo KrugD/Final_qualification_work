@@ -20,8 +20,8 @@ model:
   mamba_expand_factor: 2
 
 training:
-  batch_size: 4                    # T4 16GB - safe batch size
-  gradient_accumulation_steps: 8   # Effective batch = 4 * 8 = 32
+  batch_size: 8                    # T4 16GB - uses ~13GB VRAM
+  gradient_accumulation_steps: 4   # Effective batch = 8 * 4 = 32
   learning_rate: 5.0e-5
   weight_decay: 0.01
   # Dataset: ~197K samples, effective_batch=32 → ~6174 steps/epoch
