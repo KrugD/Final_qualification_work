@@ -230,7 +230,7 @@ results/
 
 # Data cache and datasets
 data_cache/
-data/
+/data/
 datasets/
 .cache/
 huggingface_cache/
