@@ -257,6 +257,10 @@ def train(config: Dict[str, Any], resume_from: Optional[str] = None):
     eval_every = config["logging"].get("eval_every_n_steps", 1000)
     
     best_eval_loss = float("inf")
+    patience = config["training"].get("early_stopping_patience", 0)  # 0 = disabled
+    epochs_without_improvement = 0
+    best_epoch = 0
+    early_stopped = False
     
     for epoch in range(start_epoch, num_epochs):
         model.train()
@@ -349,9 +353,31 @@ def train(config: Dict[str, Any], resume_from: Optional[str] = None):
                     # Save best model
                     if eval_metrics["eval_loss"] < best_eval_loss:
                         best_eval_loss = eval_metrics["eval_loss"]
+                        best_epoch = epoch + 1
                         best_model_dir = save_dir / "best_model"
+                        
+                        # Save accelerator state (for resuming training)
                         accelerator.save_state(str(best_model_dir))
-                        logger.info(f"New best model saved with eval_loss={best_eval_loss:.4f}")
+                        
+                        # Save model weights separately (for easy download & inference)
+                        unwrapped = accelerator.unwrap_model(model)
+                        unwrapped.save_pretrained(str(best_model_dir / "weights"))
+                        
+                        # Save best metrics
+                        best_metrics = {
+                            "eval_loss": best_eval_loss,
+                            "global_step": global_step,
+                            "epoch": epoch + 1,
+                            **{k: v for k, v in eval_metrics.items() if k != "eval_loss"},
+                        }
+                        torch.save(best_metrics, str(best_model_dir / "best_metrics.pt"))
+                        
+                        logger.info(
+                            f"New best model saved at step {global_step} "
+                            f"with eval_loss={best_eval_loss:.4f}, "
+                            f"rouge1={eval_metrics.get('eval_rouge1', 0):.4f}, "
+                            f"rougeL={eval_metrics.get('eval_rougeL', 0):.4f}"
+                        )
             
             # Save checkpoint
             if global_step % save_every == 0:
@@ -365,19 +391,54 @@ def train(config: Dict[str, Any], resume_from: Optional[str] = None):
         if accelerator.is_main_process:
             logger.info(f"Epoch {epoch + 1} completed. Average loss: {avg_epoch_loss:.4f}")
             log_metrics(experiment, {"epoch_loss": avg_epoch_loss}, epoch=epoch + 1)
+        
+        # Early stopping check (per epoch)
+        if patience > 0:
+            if best_epoch == epoch + 1:
+                # Improvement happened during this epoch
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
+                logger.info(
+                    f"No improvement for {epochs_without_improvement}/{patience} epochs "
+                    f"(best was epoch {best_epoch}, eval_loss={best_eval_loss:.4f})"
+                )
+                if epochs_without_improvement >= patience:
+                    logger.info(
+                        f"Early stopping triggered! No improvement for {patience} epochs. "
+                        f"Best eval_loss: {best_eval_loss:.4f} at epoch {best_epoch}."
+                    )
+                    early_stopped = True
+                    break
     
     # Save final model
     final_model_dir = save_dir / "final_model"
     accelerator.save_state(str(final_model_dir))
     
-    # Save model in custom format for inference
+    # Save model weights for inference
     if accelerator.is_main_process:
         unwrapped_model = accelerator.unwrap_model(model)
-        unwrapped_model.save_pretrained(str(save_dir / "model_for_inference"))
-        logger.info(f"Training completed. Final model saved to {final_model_dir}")
+        inference_dir = save_dir / "model_for_inference"
+        unwrapped_model.save_pretrained(str(inference_dir))
+        
+        # Save training summary
+        training_summary = {
+            "total_steps": global_step,
+            "total_epochs": num_epochs,
+            "best_eval_loss": best_eval_loss,
+            "final_train_loss": avg_epoch_loss,
+        }
+        torch.save(training_summary, str(save_dir / "training_summary.pt"))
+        
+        logger.info(
+            f"Training completed. Final model saved to {inference_dir}\n"
+            f"  Best eval_loss: {best_eval_loss:.4f}\n"
+            f"  Total steps: {global_step}\n"
+            f"  Best model weights: {save_dir / 'best_model' / 'weights'}"
+        )
         
         if experiment:
-            log_model(experiment, str(save_dir / "model_for_inference"))
+            log_model(experiment, str(inference_dir))
             experiment.end()
 
 

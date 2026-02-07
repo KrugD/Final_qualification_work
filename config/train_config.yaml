@@ -52,16 +52,22 @@ training:
   weight_decay: 0.01
   
   # Number of training epochs
-  num_epochs: 10
+  # Dataset: ~197K samples, effective_batch=32 → ~6174 steps/epoch
+  # Paper recommends 100K steps → 20 epochs ≈ ~123K steps
+  num_epochs: 20
   
-  # Warmup steps for learning rate scheduler
-  warmup_steps: 1000
+  # Warmup steps for learning rate scheduler (paper: 10,000)
+  warmup_steps: 10000
   
   # Maximum gradient norm for clipping
   max_grad_norm: 1.0
   
   # Mixed precision training: "no", "fp16", or "bf16"
   mixed_precision: "fp16"
+  
+  # Early stopping: stop if eval_loss doesn't improve for N epochs
+  # Set to 0 to disable
+  early_stopping_patience: 5
   
   # Output directory for checkpoints
   output_dir: "checkpoints"
