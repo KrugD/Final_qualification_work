@@ -285,12 +285,13 @@ def train(config: Dict[str, Any], resume_from: Optional[str] = None):
                 loss = outputs["loss"]
                 accelerator.backward(loss)
                 
-                # Gradient clipping
-                if config["training"].get("max_grad_norm"):
-                    accelerator.clip_grad_norm_(
-                        model.parameters(),
-                        config["training"]["max_grad_norm"],
-                    )
+                # Gradient clipping (only when gradients are synced)
+                if accelerator.sync_gradients:
+                    if config["training"].get("max_grad_norm"):
+                        accelerator.clip_grad_norm_(
+                            model.parameters(),
+                            config["training"]["max_grad_norm"],
+                        )
                 
                 optimizer.step()
                 scheduler.step()
