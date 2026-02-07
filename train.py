@@ -142,12 +142,16 @@ def evaluate(
         rouge_scores = compute_rouge(preds, refs)
         metrics.update({f"eval_{k}": v for k, v in rouge_scores.items()})
         
-        # BERTScore
+        # BERTScore (skip if bert-score not installed or model unavailable)
         try:
-            bertscore_scores = compute_bertscore(preds, refs)
+            bertscore_scores = compute_bertscore(
+                preds, refs,
+                model_type="bert-base-multilingual-cased",
+                device="cuda" if torch.cuda.is_available() else "cpu",
+            )
             metrics.update({f"eval_{k}": v for k, v in bertscore_scores.items()})
         except Exception as e:
-            logger.warning(f"BERTScore computation failed: {e}")
+            logger.warning(f"BERTScore computation skipped: {e}")
         
         # Compression ratio
         compression_scores = compute_compression_ratio(preds, srcs)
@@ -299,10 +303,11 @@ def train(config: Dict[str, Any], resume_from: Optional[str] = None):
             
             epoch_loss += loss.item()
             num_batches += 1
-            global_step += 1
             
-            # Update progress bar
-            progress_bar.set_postfix({"loss": loss.item(), "lr": scheduler.get_last_lr()[0]})
+            # Update progress bar and step counter only on sync (after gradient accumulation)
+            if accelerator.sync_gradients:
+                global_step += 1
+                progress_bar.set_postfix({"loss": loss.item(), "lr": scheduler.get_last_lr()[0]})
             
             # Log metrics
             if global_step % log_every == 0 and accelerator.is_main_process:
