@@ -84,24 +84,34 @@ def compute_bertscore(
     predictions = [p if p.strip() else "empty" for p in predictions]
     references = [r if r.strip() else "empty" for r in references]
     
-    try:
-        P, R, F1 = score(
-            predictions,
-            references,
-            model_type=model_type,
-            batch_size=batch_size,
-            device=device,
-            verbose=False,
-        )
-        
-        return {
-            "bertscore_precision": P.mean().item(),
-            "bertscore_recall": R.mean().item(),
-            "bertscore_f1": F1.mean().item(),
-        }
-    except Exception as e:
-        logger.error(f"BERTScore computation failed: {e}")
-        return {"bertscore_precision": 0.0, "bertscore_recall": 0.0, "bertscore_f1": 0.0}
+    # Try primary model, fallback to multilingual
+    models_to_try = [model_type, "bert-base-multilingual-cased"]
+    
+    for model in models_to_try:
+        try:
+            P, R, F1 = score(
+                predictions,
+                references,
+                model_type=model,
+                batch_size=batch_size,
+                device=device,
+                verbose=False,
+            )
+            
+            if model != model_type:
+                logger.info(f"BERTScore: using fallback model '{model}'")
+            
+            return {
+                "bertscore_precision": P.mean().item(),
+                "bertscore_recall": R.mean().item(),
+                "bertscore_f1": F1.mean().item(),
+            }
+        except Exception as e:
+            logger.warning(f"BERTScore with '{model}' failed: {e}")
+            continue
+    
+    logger.error("BERTScore: all models failed")
+    return {"bertscore_precision": 0.0, "bertscore_recall": 0.0, "bertscore_f1": 0.0}
 
 
 def compute_all_metrics(
