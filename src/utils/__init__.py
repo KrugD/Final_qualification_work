@@ -6,7 +6,7 @@ from .logging_utils import (
     log_model,
     setup_logging,
 )
-from .metrics import compute_rouge, compute_bertscore
+from .metrics import compute_rouge, compute_bertscore, compute_compression_ratio
 
 __all__ = [
     "setup_comet_logging",
@@ -17,4 +17,5 @@ __all__ = [
     "setup_logging",
     "compute_rouge",
     "compute_bertscore",
+    "compute_compression_ratio",
 ]

@@ -25,6 +25,8 @@ from src.utils import (
     log_model,
     setup_logging,
     compute_rouge,
+    compute_bertscore,
+    compute_compression_ratio,
 )
 
 logger = logging.getLogger(__name__)
@@ -90,6 +92,7 @@ def evaluate(
     
     all_predictions = []
     all_references = []
+    all_sources = []
     total_loss = 0.0
     num_batches = 0
     
@@ -113,23 +116,42 @@ def evaluate(
                     max_length=batch["labels"].shape[1],
                 )
                 
-                # Decode predictions and references
+                # Decode predictions, references, and sources
                 predictions = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
                 references = tokenizer.batch_decode(batch["labels"], skip_special_tokens=True)
+                sources = tokenizer.batch_decode(batch["input_ids"], skip_special_tokens=True)
                 
                 all_predictions.extend(predictions)
                 all_references.extend(references)
+                all_sources.extend(sources)
     
     # Gather predictions from all processes
     all_predictions = accelerator.gather_for_metrics(all_predictions)
     all_references = accelerator.gather_for_metrics(all_references)
+    all_sources = accelerator.gather_for_metrics(all_sources)
     
     # Compute metrics on main process
     metrics = {"eval_loss": total_loss / max(num_batches, 1)}
     
     if accelerator.is_main_process and all_predictions:
-        rouge_scores = compute_rouge(all_predictions[:max_samples], all_references[:max_samples])
+        preds = all_predictions[:max_samples]
+        refs = all_references[:max_samples]
+        srcs = all_sources[:max_samples]
+        
+        # ROUGE scores
+        rouge_scores = compute_rouge(preds, refs)
         metrics.update({f"eval_{k}": v for k, v in rouge_scores.items()})
+        
+        # BERTScore
+        try:
+            bertscore_scores = compute_bertscore(preds, refs)
+            metrics.update({f"eval_{k}": v for k, v in bertscore_scores.items()})
+        except Exception as e:
+            logger.warning(f"BERTScore computation failed: {e}")
+        
+        # Compression ratio
+        compression_scores = compute_compression_ratio(preds, srcs)
+        metrics.update({f"eval_{k}": v for k, v in compression_scores.items()})
     
     model.train()
     return metrics, all_predictions[:5], all_references[:5]
@@ -279,11 +301,19 @@ def train(config: Dict[str, Any], resume_from: Optional[str] = None):
             
             # Log metrics
             if global_step % log_every == 0 and accelerator.is_main_process:
+                # Compute gradient norm
+                grad_norm = 0.0
+                for p in model.parameters():
+                    if p.grad is not None:
+                        grad_norm += p.grad.data.norm(2).item() ** 2
+                grad_norm = grad_norm ** 0.5
+                
                 metrics = {
                     "train_loss": loss.item(),
                     "diffusion_loss": outputs.get("diffusion_loss", loss).item(),
                     "similarity_loss": outputs.get("similarity_loss", torch.tensor(0.0)).item(),
                     "learning_rate": scheduler.get_last_lr()[0],
+                    "grad_norm": grad_norm,
                     "epoch": epoch + 1,
                 }
                 log_metrics(experiment, metrics, step=global_step)
