@@ -126,7 +126,7 @@ def log_samples(
             html_table += f"<tr><td>{source}</td><td>{target}</td><td>{prediction}</td></tr>"
         html_table += "</table>"
         
-        experiment.log_html(html_table, step=step)
+        experiment.log_html(html_table)
         
         # Also log as text
         for i, sample in enumerate(samples[:3]):  # Log first 3 as text

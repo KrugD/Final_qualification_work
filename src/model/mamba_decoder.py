@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional, Tuple
 import math
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Try to import Mamba, fallback to a simple implementation if not available
 try:
@@ -10,7 +13,7 @@ try:
     MAMBA_AVAILABLE = True
 except ImportError:
     MAMBA_AVAILABLE = False
-    print("Warning: mamba-ssm not installed. Using fallback implementation.")
+    logger.info("mamba-ssm not available. Using fallback implementation.")
 
 
 class TimestepEmbedding(nn.Module):

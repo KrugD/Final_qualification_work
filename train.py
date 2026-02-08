@@ -304,10 +304,12 @@ def train(config: Dict[str, Any], resume_from: Optional[str] = None):
             epoch_loss += loss.item()
             num_batches += 1
             
-            # Update progress bar and step counter only on sync (after gradient accumulation)
-            if accelerator.sync_gradients:
-                global_step += 1
-                progress_bar.set_postfix({"loss": loss.item(), "lr": scheduler.get_last_lr()[0]})
+            # All logging/eval/save only after gradient accumulation completes
+            if not accelerator.sync_gradients:
+                continue
+            
+            global_step += 1
+            progress_bar.set_postfix({"loss": loss.item(), "lr": scheduler.get_last_lr()[0]})
             
             # Log metrics
             if global_step % log_every == 0 and accelerator.is_main_process:
