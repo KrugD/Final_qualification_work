@@ -121,6 +121,18 @@ def evaluate(
                 references = tokenizer.batch_decode(batch["labels"], skip_special_tokens=True)
                 sources = tokenizer.batch_decode(batch["input_ids"], skip_special_tokens=True)
                 
+                # Log first example for debugging
+                if len(all_predictions) == 0 and accelerator.is_main_process:
+                    raw_tokens = tokenizer.convert_ids_to_tokens(generated_ids[0])
+                    num_mask = sum(1 for t in raw_tokens if t == "▁" or "extra_id" in t)
+                    num_pad = sum(1 for t in raw_tokens if t == "</s>" or t == "<pad>")
+                    logger.info(
+                        f"Generation debug: total_tokens={len(raw_tokens)}, "
+                        f"mask/special={num_mask}, pad={num_pad}, "
+                        f"prediction_len={len(predictions[0].split())}, "
+                        f"prediction='{predictions[0][:200]}'"
+                    )
+                
                 all_predictions.extend(predictions)
                 all_references.extend(references)
                 all_sources.extend(sources)
