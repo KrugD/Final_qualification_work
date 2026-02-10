@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import tempfile
 import pandas as pd
 from pydub import AudioSegment
 
@@ -31,7 +32,7 @@ def save_asr_to_txt(dataframe, output_txt_path):
 
 
 def parse_diarization_from_txt(txt_file_path):
-    """Parse diarization results from text file.
+    """Parse diarization results from text file (for standalone use).
     
     Args:
         txt_file_path: Path to diarization text file
@@ -78,6 +79,46 @@ def parse_diarization_from_txt(txt_file_path):
                     current_start = None
                     current_end = None
                     current_duration = None
+    
+    return pd.DataFrame(data)
+
+
+def parse_asr_from_txt(txt_file_path):
+    """Parse ASR results from text file (for standalone use).
+    
+    Args:
+        txt_file_path: Path to ASR text file
+        
+    Returns:
+        DataFrame: Parsed ASR data with columns: speaker, start_time, end_time, duration, text, word_count
+    """
+    data = []
+    
+    with open(txt_file_path, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+        
+        current = {}
+        
+        for line in lines:
+            line = line.strip()
+            
+            if line.startswith("Speaker:"):
+                current['speaker'] = line.replace("Speaker:", "").strip()
+            elif line.startswith("Start Time:"):
+                current['start_time'] = float(line.replace("Start Time:", "").replace("s", "").strip())
+            elif line.startswith("End Time:"):
+                current['end_time'] = float(line.replace("End Time:", "").replace("s", "").strip())
+            elif line.startswith("Duration:"):
+                current['duration'] = float(line.replace("Duration:", "").replace("s", "").strip())
+            elif line.startswith("Text:"):
+                current['text'] = line.replace("Text:", "").strip()
+            elif line.startswith("Word Count:"):
+                current['word_count'] = int(line.replace("Word Count:", "").strip())
+                
+                # All fields collected — save and reset
+                if 'speaker' in current and 'text' in current:
+                    data.append(current)
+                current = {}
     
     return pd.DataFrame(data)
 
@@ -135,11 +176,12 @@ def transcribe_audio_segments(segments, asr_pipeline):
     results = []
     
     for segment in segments:
-        temp_file = f"temp_{segment['speaker']}_{segment['segment_index']}.wav"
-        
+        temp_file = None
         try:
-            # Export segment to temporary file
-            segment["audio_segment"].export(temp_file, format="wav")
+            # Use tempfile for safe temporary file handling
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                temp_file = tmp.name
+                segment["audio_segment"].export(temp_file, format="wav")
             
             # Transcribe using ASR
             asr_result = asr_pipeline(temp_file, return_timestamps=True)
@@ -164,19 +206,22 @@ def transcribe_audio_segments(segments, asr_pipeline):
         
         finally:
             # Clean up temporary file
-            if os.path.exists(temp_file):
+            if temp_file and os.path.exists(temp_file):
                 os.remove(temp_file)
     
     return results
 
 
-def perform_speech_recognition(audio_file_path, diarization_txt_path, output_txt_path):
+def perform_speech_recognition(audio_file_path, diarization_data, output_txt_path=None):
     """Perform speech recognition on diarized segments.
+    
+    Accepts diarization results either as a DataFrame (pipeline mode)
+    or as a path to diarization text file (standalone mode).
     
     Args:
         audio_file_path: Path to input audio file
-        diarization_txt_path: Path to text file with diarization results
-        output_txt_path: Path for output text file
+        diarization_data: DataFrame with diarization results OR path to diarization txt file
+        output_txt_path: Optional path for output text file (None = don't save)
         
     Returns:
         DataFrame: DataFrame with transcription results
@@ -186,8 +231,12 @@ def perform_speech_recognition(audio_file_path, diarization_txt_path, output_txt
     print("Loading ASR model...")
     asr_pipeline = load_asr_model()
     
-    print("Loading diarization results...")
-    diarization_dataframe = parse_diarization_from_txt(diarization_txt_path)
+    # Accept both DataFrame and file path
+    if isinstance(diarization_data, pd.DataFrame):
+        diarization_dataframe = diarization_data
+    else:
+        print("Loading diarization results from file...")
+        diarization_dataframe = parse_diarization_from_txt(diarization_data)
     
     if diarization_dataframe.empty:
         print("No diarization data found")
@@ -206,8 +255,9 @@ def perform_speech_recognition(audio_file_path, diarization_txt_path, output_txt
     if not results_dataframe.empty:
         results_dataframe = results_dataframe.sort_values("start_time").reset_index(drop=True)
         
-        # Save to text file
-        save_asr_to_txt(results_dataframe, output_txt_path)
+        # Save to text file if path provided
+        if output_txt_path:
+            save_asr_to_txt(results_dataframe, output_txt_path)
         
         execution_time = time.time() - start_time
         print(f"Speech recognition completed in {execution_time:.2f} seconds")

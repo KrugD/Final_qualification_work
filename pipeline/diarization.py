@@ -2,7 +2,6 @@ import time
 import sys
 import os
 import pandas as pd
-from pydub import AudioSegment
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -29,8 +28,57 @@ def save_diarization_to_txt(dataframe, output_txt_path):
             file.write("-" * 30 + "\n")
 
 
-def perform_diarization(audio_file_path, output_txt_path):
-    """Perform speaker diarization on audio file."""
+def merge_consecutive_segments(dataframe, max_gap=None):
+    """Merge consecutive segments from the same speaker.
+    
+    Reduces the number of segments by combining adjacent speech from the same
+    speaker, giving Whisper more context and reducing ASR overhead.
+    
+    Args:
+        dataframe: DataFrame with diarization results (sorted by start_time)
+        max_gap: Maximum gap in seconds to merge segments (default from config)
+        
+    Returns:
+        DataFrame: Merged segments
+    """
+    if max_gap is None:
+        max_gap = ModelConfig.MERGE_GAP_SECONDS
+    
+    if dataframe.empty or len(dataframe) < 2:
+        return dataframe
+    
+    merged = []
+    current = dataframe.iloc[0].to_dict()
+    
+    for i in range(1, len(dataframe)):
+        row = dataframe.iloc[i]
+        
+        # Merge if same speaker and gap is small enough
+        if (row['speaker'] == current['speaker'] and 
+            row['start_time'] - current['end_time'] <= max_gap):
+            current['end_time'] = row['end_time']
+            current['duration'] = current['end_time'] - current['start_time']
+        else:
+            merged.append(current)
+            current = row.to_dict()
+    
+    merged.append(current)
+    result = pd.DataFrame(merged).reset_index(drop=True)
+    
+    print(f"Merged {len(dataframe)} segments into {len(result)} segments")
+    return result
+
+
+def perform_diarization(audio_file_path, output_txt_path=None):
+    """Perform speaker diarization on audio file.
+    
+    Args:
+        audio_file_path: Path to input audio file
+        output_txt_path: Optional path for output text file (None = don't save)
+        
+    Returns:
+        DataFrame: Diarization results with columns: speaker, start_time, end_time, duration
+    """
     start_time = time.time()
     
     print("Loading diarization model...")
@@ -38,11 +86,10 @@ def perform_diarization(audio_file_path, output_txt_path):
     
     print("Performing diarization...")
     diarization = diarization_pipeline(audio_file_path)
-    audio = AudioSegment.from_file(audio_file_path)
     
     segments = []
     
-    # Correct way to access diarization results in new pyannote
+    # Access diarization results via speaker_diarization attribute (pyannote 3.x)
     for segment, track, speaker in diarization.speaker_diarization.itertracks(yield_label=True):
         if segment.end - segment.start < ModelConfig.MIN_SEGMENT_DURATION:
             continue
@@ -60,8 +107,12 @@ def perform_diarization(audio_file_path, output_txt_path):
     if not results_dataframe.empty:
         results_dataframe = results_dataframe.sort_values("start_time").reset_index(drop=True)
         
-        # Save to text file
-        save_diarization_to_txt(results_dataframe, output_txt_path)
+        # Merge consecutive segments from same speaker to reduce ASR overhead
+        results_dataframe = merge_consecutive_segments(results_dataframe)
+        
+        # Save to text file if path provided
+        if output_txt_path:
+            save_diarization_to_txt(results_dataframe, output_txt_path)
         
         execution_time = time.time() - start_time
         print(f"Diarization completed in {execution_time:.2f} seconds")

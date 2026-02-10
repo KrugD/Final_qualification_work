@@ -30,7 +30,10 @@ class ModelConfig:
     
     # Processing parameters
     MIN_SEGMENT_DURATION = 0.5  # seconds
-    MAX_SUMMARY_INPUT_LENGTH = 2000  # characters
+    MAX_SUMMARY_INPUT_TOKENS = 512  # max tokens for summarization input (FRED-T5 limit)
+
+    # Segment merging parameters
+    MERGE_GAP_SECONDS = 2.0  # max gap to merge consecutive same-speaker segments
 
     # Speaker clustering parameters
     CLUSTERING_DISTANCE_THRESHOLD = 0.4
