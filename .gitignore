@@ -29,6 +29,13 @@ MANIFEST
 # Audio files
 *.wav
 
+# Pipeline output files
+pipeline_output/
+
+# Model checkpoints
+checkpoints/
+checkpoints_test/
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
