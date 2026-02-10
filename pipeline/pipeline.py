@@ -188,6 +188,7 @@ def process_with_speaker_analysis(audio_file_path, base_output_dir="pipeline_out
     
     Runs normal pipeline + extracts speaker embeddings for
     clustering visualization and quality metrics.
+    Reuses diarization results from the pipeline to avoid redundant computation.
     
     Args:
         audio_file_path: Path to input audio file
@@ -206,7 +207,7 @@ def process_with_speaker_analysis(audio_file_path, base_output_dir="pipeline_out
     if result is None:
         return False
     
-    # Then extract speaker embeddings and generate visualization
+    # Then extract speaker embeddings using EXISTING diarization results
     print("\n" + "=" * 60)
     print("SPEAKER ANALYSIS STAGE")
     print("=" * 60)
@@ -214,39 +215,44 @@ def process_with_speaker_analysis(audio_file_path, base_output_dir="pipeline_out
     try:
         speaker_clustering = SpeakerClustering()
         
-        # Extract per-segment embeddings for proper metrics calculation
-        print("Extracting segment embeddings for analysis...")
-        embeddings, labels, label_to_speaker = speaker_clustering.extract_segment_embeddings(audio_file_path)
+        # Reuse diarization DataFrame from the pipeline (no re-diarization!)
+        diarization_df = result['diarization']
         
-        if embeddings is None or len(embeddings) == 0:
-            print("No embeddings extracted - skipping visualization")
-            return True
-        
-        n_speakers = len(set(labels))
-        n_segments = len(labels)
-        
-        print(f"Found {n_segments} segments from {n_speakers} speakers")
+        n_speakers = diarization_df['speaker'].nunique()
         
         if n_speakers < 2:
             print("Only one speaker detected - skipping clustering analysis")
             return True
         
+        # Extract per-segment embeddings from existing diarization
+        print("Extracting segment embeddings from existing diarization...")
+        embeddings, labels, avg_embeddings = _extract_embeddings_from_diarization(
+            speaker_clustering, audio_file_path, diarization_df
+        )
+        
+        if embeddings is None or len(embeddings) == 0:
+            print("No embeddings extracted - skipping visualization")
+            return True
+        
+        n_segments = len(labels)
+        n_clusters = len(set(labels))
+        
+        print(f"Found {n_segments} segments from {n_clusters} speakers")
+        
         # Calculate clustering quality metrics using segment-level embeddings
         speaker_clustering.calculate_clustering_metrics(embeddings, labels, output_dir)
         
-        # For visualization, get averaged embeddings per speaker
-        speaker_embeddings = speaker_clustering.extract_speaker_embeddings(audio_file_path)
-        
-        if speaker_embeddings and len(speaker_embeddings) >= 3:
-            all_speaker_data = {audio_file_path: speaker_embeddings}
+        # Visualize using averaged embeddings per speaker
+        if avg_embeddings and len(avg_embeddings) >= 3:
+            all_speaker_data = {audio_file_path: avg_embeddings}
             
             speaker_mapping = {}
-            for i, speaker in enumerate(speaker_embeddings.keys()):
+            for i, speaker in enumerate(avg_embeddings.keys()):
                 speaker_mapping[(audio_file_path, speaker)] = f"speaker_{i:02d}"
             
             speaker_clustering.visualize_clusters(all_speaker_data, speaker_mapping, output_dir)
         else:
-            print(f"Only {n_speakers} speakers detected - need at least 3 for visualization")
+            print(f"Only {n_clusters} speakers - need at least 3 for visualization")
         
         print("Speaker analysis completed")
         return True
@@ -257,6 +263,67 @@ def process_with_speaker_analysis(audio_file_path, base_output_dir="pipeline_out
         traceback.print_exc()
         # Return True because the main pipeline succeeded
         return True
+
+
+def _extract_embeddings_from_diarization(speaker_clustering, audio_file_path, diarization_df):
+    """Extract both per-segment and averaged embeddings from existing diarization.
+    
+    Single pass over segments — extracts embeddings once, returns both
+    per-segment (for metrics) and averaged per-speaker (for visualization).
+    
+    Returns:
+        tuple: (segment_embeddings, segment_labels, avg_speaker_embeddings)
+    """
+    import numpy as np
+    from pyannote.core import Segment
+    
+    all_embeddings = []
+    all_labels = []
+    speaker_to_label = {}
+    speaker_data = {}
+    label_counter = 0
+    
+    for _, row in diarization_df.iterrows():
+        segment = Segment(row['start_time'], row['end_time'])
+        speaker = row['speaker']
+        
+        if segment.end - segment.start < 1.0:
+            continue
+        
+        try:
+            embedding = speaker_clustering.embedding_inference.crop(audio_file_path, segment)
+            
+            if speaker not in speaker_to_label:
+                speaker_to_label[speaker] = label_counter
+                label_counter += 1
+                speaker_data[speaker] = {'embeddings': [], 'durations': []}
+            
+            all_embeddings.append(embedding)
+            all_labels.append(speaker_to_label[speaker])
+            speaker_data[speaker]['embeddings'].append(embedding)
+            speaker_data[speaker]['durations'].append(segment.end - segment.start)
+            
+        except Exception:
+            continue
+    
+    if not all_embeddings:
+        return None, None, None
+    
+    embeddings_array = np.vstack(all_embeddings)
+    labels_array = np.array(all_labels)
+    
+    # Average embeddings per speaker for visualization
+    avg_embeddings = {}
+    for speaker, data in speaker_data.items():
+        if data['embeddings']:
+            avg_embeddings[speaker] = {
+                'embedding': np.mean(data['embeddings'], axis=0),
+                'total_duration': sum(data['durations']),
+                'num_segments': len(data['embeddings']),
+                'chunk_path': audio_file_path
+            }
+    
+    return embeddings_array, labels_array, avg_embeddings
 
 
 def process_long_audio_with_clustering(audio_file_path, base_output_dir="pipeline_output"):
