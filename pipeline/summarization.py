@@ -30,8 +30,47 @@ def save_summarization_to_txt(dataframe, output_txt_path):
             file.write("=" * 50 + "\n\n")
 
 
+def parse_asr_from_txt(txt_file_path):
+    """Parse ASR results from text file.
+    
+    Args:
+        txt_file_path: Path to ASR text file
+        
+    Returns:
+        DataFrame: Parsed ASR data
+    """
+    data = []
+    
+    with open(txt_file_path, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+        
+        current_speaker = None
+        current_text = None
+        
+        for line in lines:
+            line = line.strip()
+            
+            if line.startswith("Speaker:"):
+                current_speaker = line.replace("Speaker:", "").strip()
+            elif line.startswith("Text:"):
+                current_text = line.replace("Text:", "").strip()
+                
+                # Once we've found speaker and text, we add them to the results
+                if current_speaker and current_text:
+                    data.append({
+                        "speaker": current_speaker,
+                        "corrected_text": current_text  # we use the same field for compatibility
+                    })
+                    
+                    # Reset for next segment
+                    current_speaker = None
+                    current_text = None
+    
+    return pd.DataFrame(data)
+
+
 def summarize_text(input_text, summarization_model, summarization_tokenizer):
-    """Summarize text using the FRED-T5-Summarizer model.
+    """Summarize text using the summarization model.
     
     Args:
         input_text: Text to summarize
@@ -43,24 +82,17 @@ def summarize_text(input_text, summarization_model, summarization_tokenizer):
     """
     try:
         prompt_text = f"<LM> Создай краткое содержание текста, сохрани ключевые идеи:\n {input_text}"
+        input_ids = torch.tensor([summarization_tokenizer.encode(prompt_text)]).to(get_device())
         
-        # Token-based truncation instead of character-based
-        input_ids = summarization_tokenizer.encode(
-            prompt_text, 
-            max_length=ModelConfig.MAX_SUMMARY_INPUT_TOKENS, 
-            truncation=True
-        )
-        input_ids = torch.tensor([input_ids]).to(get_device())
-        
-        # Beam search without sampling (consistent, high-quality results)
         outputs = summarization_model.generate(
             input_ids,
             eos_token_id=summarization_tokenizer.eos_token_id,
             num_beams=5,
             min_new_tokens=17,
             max_new_tokens=200,
-            do_sample=False,
+            do_sample=True,
             no_repeat_ngram_size=4,
+            top_p=0.9
         )
         
         summary = summarization_tokenizer.decode(outputs[0][1:], skip_special_tokens=True)
@@ -71,46 +103,30 @@ def summarize_text(input_text, summarization_model, summarization_tokenizer):
         return input_text[:200] + "...", False
 
 
-def perform_summarization(corrected_data, output_txt_path=None):
-    """Perform text summarization on corrected ASR results.
-    
-    Groups text by speaker, then summarizes each speaker's combined text.
-    Accepts corrected results either as a DataFrame (pipeline mode)
-    or as a path to text file (standalone mode).
+def perform_summarization(input_txt_path, output_txt_path):
+    """Perform text summarization on ASR results.
     
     Args:
-        corrected_data: DataFrame with corrected ASR results OR path to text file
-        output_txt_path: Optional path for output text file (None = don't save)
+        input_txt_path: Path to input text file with ASR results
+        output_txt_path: Path for output text file with summaries
         
     Returns:
-        DataFrame: DataFrame with summaries per speaker
+        DataFrame: DataFrame with summaries
     """
     start_time = time.time()
     
     print("Loading summarization model...")
     summarization_model, summarization_tokenizer = load_summarization_model()
     
-    # Accept both DataFrame and file path
-    if isinstance(corrected_data, pd.DataFrame):
-        input_dataframe = corrected_data
-    else:
-        print("Loading data from file...")
-        try:
-            from pipeline.asr import parse_asr_from_txt
-        except ImportError:
-            from asr import parse_asr_from_txt
-        input_dataframe = parse_asr_from_txt(corrected_data)
+    # Parse ASR data from text file
+    input_dataframe = parse_asr_from_txt(input_txt_path)
     
     if input_dataframe.empty:
-        print("No data found to summarize")
+        print("No ASR data found to summarize")
         return pd.DataFrame()
     
-    # Use corrected text if available, otherwise fall back to raw text
-    text_column = 'corrected_text' if 'corrected_text' in input_dataframe.columns else 'text'
-    
     # Group texts by speaker
-    speaker_texts = input_dataframe.groupby("speaker")[text_column].apply(" ".join).reset_index()
-    speaker_texts.rename(columns={text_column: 'full_text'}, inplace=True)
+    speaker_texts = input_dataframe.groupby("speaker")["corrected_text"].apply(" ".join).reset_index()
     
     print(f"Summarizing texts for {len(speaker_texts)} speakers...")
     
@@ -118,13 +134,16 @@ def perform_summarization(corrected_data, output_txt_path=None):
     
     for _, row in speaker_texts.iterrows():
         speaker = row["speaker"]
-        original_text = row["full_text"]
+        original_text = row["corrected_text"]
         
         print(f"Summarizing for {speaker}...")
         
-        # Truncation is now handled at the token level inside summarize_text
+        processed_text = original_text
+        if len(original_text) > ModelConfig.MAX_SUMMARY_INPUT_LENGTH:
+            processed_text = original_text[:ModelConfig.MAX_SUMMARY_INPUT_LENGTH] + "..."
+        
         summary_text, success_status = summarize_text(
-            original_text, 
+            processed_text, 
             summarization_model, 
             summarization_tokenizer
         )
@@ -147,9 +166,8 @@ def perform_summarization(corrected_data, output_txt_path=None):
     
     summary_dataframe = pd.DataFrame(summaries)
     
-    # Save to text file if path provided
-    if output_txt_path:
-        save_summarization_to_txt(summary_dataframe, output_txt_path)
+    # Save to text file
+    save_summarization_to_txt(summary_dataframe, output_txt_path)
     
     total_execution_time = time.time() - start_time
     print(f"Summarization completed in {total_execution_time:.2f} seconds")
@@ -157,5 +175,29 @@ def perform_summarization(corrected_data, output_txt_path=None):
     return summary_dataframe
 
 
+def create_meeting_minutes(summary_txt_path, output_file_path):
+    """Create meeting minutes from speaker summaries.
+    
+    Args:
+        summary_txt_path: Path to text file with speaker summaries
+        output_file_path: Path for output meeting minutes file
+    """
+    # Parse summary data
+    summary_dataframe = parse_asr_from_txt(summary_txt_path)  # Используем ASR парсер
+    
+    with open(output_file_path, 'w', encoding='utf-8') as file:
+        file.write("ПРОТОКОЛ ВСТРЕЧИ\n")
+        file.write("=" * 50 + "\n\n")
+        
+        for _, row in summary_dataframe.iterrows():
+            file.write(f"СПИКЕР: {row['speaker']}\n")
+            file.write(f"КЛЮЧЕВЫЕ ТЕЗИСЫ:\n")
+            file.write(f"{row['corrected_text']}\n")
+            file.write("-" * 50 + "\n\n")
+    
+    print(f"Meeting minutes saved to {output_file_path}")
+
+
 if __name__ == "__main__":
-    result_dataframe = perform_summarization("asr_output.txt", "summarization_output.txt")
+    result_dataframe = perform_summarization("asr.txt", "summarization_output.txt")
+    create_meeting_minutes("summarization_output.txt", "meeting_minutes.txt")
