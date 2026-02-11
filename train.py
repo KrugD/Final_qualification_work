@@ -303,6 +303,13 @@ def train(config: Dict[str, Any], resume_from: Optional[str] = None):
                 
                 # Gradient clipping (only when gradients are synced)
                 if accelerator.sync_gradients:
+                    # Compute gradient norm BEFORE clipping and zero_grad
+                    _grad_norm = 0.0
+                    for p in model.parameters():
+                        if p.grad is not None:
+                            _grad_norm += p.grad.data.norm(2).item() ** 2
+                    _grad_norm = _grad_norm ** 0.5
+                    
                     if config["training"].get("max_grad_norm"):
                         accelerator.clip_grad_norm_(
                             model.parameters(),
@@ -325,12 +332,7 @@ def train(config: Dict[str, Any], resume_from: Optional[str] = None):
             
             # Log metrics
             if global_step % log_every == 0 and accelerator.is_main_process:
-                # Compute gradient norm
-                grad_norm = 0.0
-                for p in model.parameters():
-                    if p.grad is not None:
-                        grad_norm += p.grad.data.norm(2).item() ** 2
-                grad_norm = grad_norm ** 0.5
+                grad_norm = _grad_norm
                 
                 metrics = {
                     "train_loss": loss.item(),
