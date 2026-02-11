@@ -324,9 +324,6 @@ class MaskedDiffusionSummarizer(nn.Module):
                 dropout=dropout,
             )
         
-        # Target CLS projection for similarity loss
-        self.target_cls_projection = nn.Linear(encoder_config.d_model, encoder_config.d_model)
-        
         # Initialize noise scheduler
         if use_semantic_noise:
             self.noise_scheduler = SemanticAwareNoiseScheduler(
@@ -340,21 +337,6 @@ class MaskedDiffusionSummarizer(nn.Module):
                 mask_token_id=self.mask_token_id,
                 schedule_type=schedule_type,
             )
-    
-    def compute_target_cls(
-        self,
-        labels: torch.Tensor,
-        labels_attention_mask: torch.Tensor,
-    ) -> torch.Tensor:
-        """Compute [CLS] embedding for target sequence using mean pooling."""
-        target_embeds = self.decoder.token_embedding(labels)
-        
-        mask = labels_attention_mask.unsqueeze(-1).float()
-        pooled = (target_embeds * mask).sum(dim=1) / (mask.sum(dim=1) + 1e-8)
-        
-        cls_embedding = self.target_cls_projection(pooled)
-        
-        return cls_embedding
     
     def compute_similarity_loss(
         self,
@@ -386,38 +368,41 @@ class MaskedDiffusionSummarizer(nn.Module):
         """
         Forward pass for training.
         
-        Uses SOURCE attention for semantic-aware noising (per NAACL 2025).
+        Per NAACL 2025 paper (Section 3.4, Figure 2):
+        1. Encode SOURCE → hidden states for decoder cross-attention + source [CLS]
+        2. Encode TARGET → attention scores for semantic-aware noising + target [CLS]
+        3. Apply semantic-aware noise: important target tokens (high attention) masked later
+        4. Decode noisy target conditioned on source encoder output
+        5. Losses: CE on masked positions + similarity(source_CLS, target_CLS.detach())
         """
         batch_size = input_ids.shape[0]
         device = input_ids.device
         
-        # Encode source with attention scores
-        encoder_hidden_states, source_cls, source_attention = self.encoder(
+        # 1. Encode SOURCE → hidden states for decoder + source [CLS]
+        encoder_hidden_states, source_cls, _ = self.encoder(
             input_ids, attention_mask
         )
         
-        # Compute target [CLS] for similarity loss
-        target_cls = self.compute_target_cls(labels, labels_attention_mask)
+        # 2. Encode TARGET → attention scores for noising + target [CLS]
+        # Per paper: "we feed the full target sequence through the encoder
+        # to obtain attention scores, reflecting the relative importance
+        # of each token to the target sentence's overall semantic meaning"
+        # No gradients needed: target [CLS] is detached in similarity loss,
+        # and attention scores are used for non-differentiable masking only
+        with torch.no_grad():
+            _, target_cls, target_attention = self.encoder(
+                labels, labels_attention_mask
+            )
         
         # Sample timesteps if not provided
         if timesteps is None:
             timesteps = self.noise_scheduler.sample_timesteps(batch_size, device)
         
-        # Apply noise to labels using SOURCE attention for importance
+        # 3. Apply noise to labels
         if self.use_semantic_noise:
-            # Use SOURCE attention scores to determine which TARGET tokens to mask
-            # This aligns target generation with source importance
-            # Interpolate source attention to target length if needed
-            source_len = source_attention.shape[1]
-            target_len = labels.shape[1]
-            
-            if source_len != target_len:
-                # Use average importance from source for all target positions
-                avg_importance = source_attention.mean(dim=1, keepdim=True)
-                target_importance = avg_importance.expand(-1, target_len)
-            else:
-                target_importance = source_attention
-            
+            # Semantic-aware noising using TARGET attention scores (paper Eq. 3):
+            # Pt = t/T - (1 - t/T) * attention_score[i]
+            # Higher attention → lower mask probability → generated first
             noisy_labels_list = []
             noise_masks_list = []
             
@@ -425,7 +410,7 @@ class MaskedDiffusionSummarizer(nn.Module):
                 t_ratio = (timesteps[i].item() + 1) / self.num_diffusion_steps
                 noisy, mask = self.noise_scheduler.add_semantic_noise(
                     labels[i:i+1],
-                    target_importance[i:i+1],
+                    target_attention[i:i+1],
                     t_ratio,
                     labels_attention_mask[i:i+1],
                 )
@@ -435,6 +420,7 @@ class MaskedDiffusionSummarizer(nn.Module):
             noisy_labels = torch.cat(noisy_labels_list, dim=0)
             noise_masks = torch.cat(noise_masks_list, dim=0)
         else:
+            # Random absorbing noise (D3PM baseline)
             mask_ratios = self.noise_scheduler.get_mask_ratio_for_training(timesteps)
             
             noisy_labels_list = []
@@ -452,7 +438,7 @@ class MaskedDiffusionSummarizer(nn.Module):
             noisy_labels = torch.cat(noisy_labels_list, dim=0)
             noise_masks = torch.cat(noise_masks_list, dim=0)
         
-        # Decode
+        # 4. Decode noisy target conditioned on source encoder output
         logits = self.decoder(
             input_ids=noisy_labels,
             encoder_hidden_states=encoder_hidden_states,
@@ -461,7 +447,7 @@ class MaskedDiffusionSummarizer(nn.Module):
             encoder_attention_mask=attention_mask,
         )
         
-        # Diffusion loss
+        # 5. Compute losses (paper Eq. 5: L = Lvb + Lcls + CE_reconstruction)
         ce_loss = F.cross_entropy(
             logits.view(-1, logits.size(-1)),
             labels.view(-1),
@@ -469,21 +455,60 @@ class MaskedDiffusionSummarizer(nn.Module):
             reduction="none",
         )
         ce_loss = ce_loss.view(batch_size, -1)
+        
+        # Lvb: CE on masked positions only (variational lower bound for absorbing diffusion)
         diffusion_loss = (ce_loss * noise_masks.float()).sum() / (noise_masks.float().sum() + 1e-8)
         
-        # Similarity loss
+        # CE reconstruction: CE on ALL non-padding positions (paper Eq. 5 third term)
+        non_pad_mask = (labels != self.pad_token_id).float()
+        reconstruction_loss = (ce_loss * non_pad_mask).sum() / (non_pad_mask.sum() + 1e-8)
+        
+        # Lcls: similarity loss (paper Eq. 4)
         similarity_loss = self.compute_similarity_loss(source_cls, target_cls)
         
-        # Total loss
-        total_loss = diffusion_loss + self.similarity_loss_weight * similarity_loss
+        # Total loss (paper Eq. 5): Lvb + Lcls + CE_reconstruction
+        total_loss = (
+            diffusion_loss
+            + self.similarity_loss_weight * similarity_loss
+            + reconstruction_loss
+        )
         
         return {
             "loss": total_loss,
             "diffusion_loss": diffusion_loss,
+            "reconstruction_loss": reconstruction_loss,
             "similarity_loss": similarity_loss,
             "logits": logits,
             "noise_masks": noise_masks,
         }
+    
+    def _apply_logit_filtering(
+        self,
+        logits: torch.Tensor,
+        temperature: float = 1.0,
+        top_k: Optional[int] = None,
+        top_p: Optional[float] = None,
+    ) -> torch.Tensor:
+        """Apply temperature, top-k and top-p filtering to logits."""
+        logits = logits / max(temperature, 1e-8)
+        
+        if top_k is not None and top_k > 0:
+            top_k = min(top_k, logits.size(-1))
+            indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
+            logits[indices_to_remove] = float("-inf")
+        
+        if top_p is not None and 0 < top_p < 1.0:
+            sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+            cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+            sorted_indices_to_remove = cumulative_probs > top_p
+            sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+            sorted_indices_to_remove[..., 0] = 0
+            indices_to_remove = sorted_indices_to_remove.scatter(
+                -1, sorted_indices, sorted_indices_to_remove
+            )
+            logits[indices_to_remove] = float("-inf")
+        
+        return logits
     
     @torch.no_grad()
     def generate(
@@ -495,8 +520,28 @@ class MaskedDiffusionSummarizer(nn.Module):
         temperature: float = 1.0,
         top_k: Optional[int] = None,
         top_p: Optional[float] = None,
+        strategy: str = "linear",
+        sample: bool = False,
+        temperature_annealing: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Generate summaries using iterative denoising."""
+        """
+        Generate summaries using iterative denoising.
+        
+        Args:
+            input_ids: Source token IDs [batch_size, seq_len]
+            attention_mask: Source attention mask [batch_size, seq_len]
+            max_length: Maximum target sequence length
+            num_inference_steps: Number of denoising steps
+            temperature: Sampling temperature (lower = more greedy)
+            top_k: Top-k filtering (None to disable)
+            top_p: Nucleus sampling threshold (None to disable)
+            strategy: Unmasking strategy:
+                - "linear": Unmask equal number of tokens each step
+                - "cosine": Follow cosine schedule for unmasking
+                - "confidence": Unmask all at once, then iteratively refine
+            sample: If True, sample from distribution; if False, use argmax
+            temperature_annealing: If True, decrease temperature over steps
+        """
         batch_size = input_ids.shape[0]
         device = input_ids.device
         max_length = max_length or self.max_target_length
@@ -517,9 +562,18 @@ class MaskedDiffusionSummarizer(nn.Module):
             batch_size, max_length, dtype=torch.long, device=device
         )
         
+        # Precompute how many tokens to unmask at each step
+        tokens_to_unmask_per_step = self._compute_unmask_schedule(
+            max_length, num_inference_steps, strategy
+        )
+        
         # Iterative denoising
         for step in range(num_inference_steps):
-            t = num_inference_steps - step - 1
+            # Map step to a timestep in [0, num_diffusion_steps-1]
+            # High timestep = noisy, low timestep = clean
+            t = int(round((num_inference_steps - step - 1) / num_inference_steps * (self.num_diffusion_steps - 1)))
+            t = max(0, min(self.num_diffusion_steps - 1, t))
+            
             timesteps = torch.full((batch_size,), t, dtype=torch.long, device=device)
             
             logits = self.decoder(
@@ -530,46 +584,50 @@ class MaskedDiffusionSummarizer(nn.Module):
                 encoder_attention_mask=attention_mask,
             )
             
-            logits = logits / temperature
+            # Apply temperature (optionally with annealing)
+            current_temp = temperature
+            if temperature_annealing:
+                # Start with higher temperature, decrease toward the end
+                progress = step / max(num_inference_steps - 1, 1)
+                current_temp = temperature * (1.0 - 0.5 * progress)  # from temp to temp/2
             
-            if top_k is not None:
-                indices_to_remove = logits < torch.topk(logits, top_k)[0][..., -1, None]
-                logits[indices_to_remove] = float("-inf")
-            
-            if top_p is not None:
-                sorted_logits, sorted_indices = torch.sort(logits, descending=True)
-                cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
-                sorted_indices_to_remove = cumulative_probs > top_p
-                sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
-                sorted_indices_to_remove[..., 0] = 0
-                indices_to_remove = sorted_indices_to_remove.scatter(
-                    -1, sorted_indices, sorted_indices_to_remove
-                )
-                logits[indices_to_remove] = float("-inf")
+            logits = self._apply_logit_filtering(logits, current_temp, top_k, top_p)
             
             probs = F.softmax(logits, dim=-1)
-            predicted_ids = probs.argmax(dim=-1)
+            
+            if sample:
+                predicted_ids = torch.multinomial(
+                    probs.view(-1, probs.size(-1)), num_samples=1
+                ).view(batch_size, max_length)
+            else:
+                predicted_ids = probs.argmax(dim=-1)
+            
             confidence = probs.max(dim=-1).values
             
-            mask_ratio = self.noise_scheduler.get_mask_ratio_for_timestep(t)
             is_masked = generated_ids == self.mask_token_id
+            num_to_unmask = tokens_to_unmask_per_step[step]
             
             for b in range(batch_size):
                 if not is_masked[b].any():
                     continue
                 
                 masked_positions = is_masked[b].nonzero().squeeze(-1)
+                if masked_positions.dim() == 0:
+                    masked_positions = masked_positions.unsqueeze(0)
+                
                 masked_confidence = confidence[b, masked_positions]
                 
-                num_unmask = max(1, int((1 - mask_ratio) * max_length) - (max_length - is_masked[b].sum().item()))
-                num_unmask = min(num_unmask, len(masked_positions))
+                actual_unmask = min(num_to_unmask, len(masked_positions))
+                actual_unmask = max(1, actual_unmask)
                 
-                if num_unmask > 0:
-                    _, top_indices = masked_confidence.topk(num_unmask)
+                if actual_unmask > 0 and len(masked_positions) > 0:
+                    _, top_indices = masked_confidence.topk(
+                        min(actual_unmask, len(masked_positions))
+                    )
                     positions_to_unmask = masked_positions[top_indices]
                     generated_ids[b, positions_to_unmask] = predicted_ids[b, positions_to_unmask]
         
-        # Final pass
+        # Final pass: unmask any remaining tokens
         is_masked = generated_ids == self.mask_token_id
         if is_masked.any():
             timesteps = torch.zeros(batch_size, dtype=torch.long, device=device)
@@ -580,12 +638,72 @@ class MaskedDiffusionSummarizer(nn.Module):
                 attention_mask=target_attention_mask,
                 encoder_attention_mask=attention_mask,
             )
-            predicted_ids = logits.argmax(dim=-1)
+            logits = self._apply_logit_filtering(logits, temperature, top_k, top_p)
+            if sample:
+                predicted_ids = torch.multinomial(
+                    F.softmax(logits, dim=-1).view(-1, logits.size(-1)), num_samples=1
+                ).view(batch_size, max_length)
+            else:
+                predicted_ids = logits.argmax(dim=-1)
             generated_ids[is_masked] = predicted_ids[is_masked]
         
         confidence_scores = F.softmax(logits, dim=-1).max(dim=-1).values
         
         return generated_ids, confidence_scores
+    
+    def _compute_unmask_schedule(
+        self,
+        total_tokens: int,
+        num_steps: int,
+        strategy: str = "linear",
+    ) -> list:
+        """
+        Compute how many tokens to unmask at each step.
+        
+        Args:
+            total_tokens: Total sequence length
+            num_steps: Number of inference steps
+            strategy: "linear", "cosine", or "confidence"
+        
+        Returns:
+            List of ints: tokens to unmask per step
+        """
+        if strategy == "linear":
+            # Equal number at each step
+            per_step = total_tokens / num_steps
+            schedule = []
+            unmasked_so_far = 0
+            for i in range(num_steps):
+                target = int(round((i + 1) * per_step))
+                to_unmask = target - unmasked_so_far
+                schedule.append(max(1, to_unmask))
+                unmasked_so_far += max(1, to_unmask)
+            return schedule
+        
+        elif strategy == "cosine":
+            # Cosine schedule: slow start, fast middle, slow end
+            schedule = []
+            unmasked_so_far = 0
+            for i in range(num_steps):
+                progress = (i + 1) / num_steps
+                target = int(round(total_tokens * (1 - math.cos(progress * math.pi / 2))))
+                to_unmask = target - unmasked_so_far
+                schedule.append(max(1, to_unmask))
+                unmasked_so_far += max(1, to_unmask)
+            return schedule
+        
+        elif strategy == "confidence":
+            # Unmask a small number at each step, focusing on highest confidence
+            per_step = max(1, total_tokens // (num_steps * 2))
+            schedule = [per_step] * num_steps
+            # Last step takes whatever remains
+            remaining = total_tokens - sum(schedule)
+            if remaining > 0:
+                schedule[-1] += remaining
+            return schedule
+        
+        else:
+            raise ValueError(f"Unknown strategy: {strategy}")
     
     def save_pretrained(self, save_directory: str):
         """Save model to directory."""

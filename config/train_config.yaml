@@ -12,8 +12,8 @@ model:
   # Number of decoder layers
   num_decoder_layers: 6
   
-  # Number of diffusion steps for inference
-  num_diffusion_steps: 20
+  # Number of diffusion steps (paper: T=50 for training, T=10 for inference eval)
+  num_diffusion_steps: 50
   
   # Dropout rate
   dropout: 0.1
@@ -26,8 +26,9 @@ model:
   use_semantic_noise: true
   
   # Weight for similarity loss between source and target [CLS] tokens
-  # From NAACL 2025 paper: Lcls = 1 - cos(Cs, Ct)
-  similarity_loss_weight: 0.1
+  # From NAACL 2025 paper Eq. 4: Lcls = 1 - cos(Cs, Ct)
+  # Paper Eq. 5 uses equal weighting (coefficient 1.0)
+  similarity_loss_weight: 1.0
   
   # Decoder type: "mamba" (CrossMamba from NAACL 2025) or "transformer" (fallback)
   decoder_type: "mamba"

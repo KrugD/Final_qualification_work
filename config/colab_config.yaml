@@ -9,11 +9,11 @@ seed: 42
 model:
   encoder: "ai-forever/ruT5-base"
   num_decoder_layers: 6
-  num_diffusion_steps: 20
+  num_diffusion_steps: 50
   dropout: 0.1
   schedule_type: "cosine"
   use_semantic_noise: true
-  similarity_loss_weight: 0.1
+  similarity_loss_weight: 1.0
   decoder_type: "mamba"
   mamba_state_size: 16
   mamba_conv_kernel: 4

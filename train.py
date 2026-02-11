@@ -228,7 +228,7 @@ def train(config: Dict[str, Any], resume_from: Optional[str] = None):
         dropout=config["model"].get("dropout", 0.1),
         schedule_type=config["model"].get("schedule_type", "cosine"),
         use_semantic_noise=config["model"].get("use_semantic_noise", True),
-        similarity_loss_weight=config["model"].get("similarity_loss_weight", 0.1),
+        similarity_loss_weight=config["model"].get("similarity_loss_weight", 1.0),
         decoder_type=config["model"].get("decoder_type", "mamba"),
         mamba_state_size=config["model"].get("mamba_state_size", 16),
         mamba_conv_kernel=config["model"].get("mamba_conv_kernel", 4),
@@ -335,6 +335,7 @@ def train(config: Dict[str, Any], resume_from: Optional[str] = None):
                 metrics = {
                     "train_loss": loss.item(),
                     "diffusion_loss": outputs.get("diffusion_loss", loss).item(),
+                    "reconstruction_loss": outputs.get("reconstruction_loss", torch.tensor(0.0)).item(),
                     "similarity_loss": outputs.get("similarity_loss", torch.tensor(0.0)).item(),
                     "learning_rate": scheduler.get_last_lr()[0],
                     "grad_norm": grad_norm,
@@ -344,6 +345,7 @@ def train(config: Dict[str, Any], resume_from: Optional[str] = None):
                 logger.info(
                     f"Step {global_step}: loss={loss.item():.4f}, "
                     f"diff_loss={outputs.get('diffusion_loss', loss).item():.4f}, "
+                    f"recon_loss={outputs.get('reconstruction_loss', torch.tensor(0.0)).item():.4f}, "
                     f"sim_loss={outputs.get('similarity_loss', torch.tensor(0.0)).item():.4f}, "
                     f"lr={scheduler.get_last_lr()[0]:.2e}"
                 )
