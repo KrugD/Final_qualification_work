@@ -1,3 +1,4 @@
+import io
 import os
 import numpy as np
 import pandas as pd
@@ -13,6 +14,8 @@ import librosa
 import sys
 import pydub
 import pydub.silence
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.manifold import TSNE
@@ -666,6 +669,136 @@ class SpeakerClustering:
             print(f"Visualization error: {e}")
             import traceback
             traceback.print_exc()
+
+    def visualize_clusters_to_buffer(self, all_speaker_data, speaker_mapping):
+        """Generate cluster visualization and return as BytesIO buffer (for bot mode).
+        
+        Args:
+            all_speaker_data: Dict of chunk_path -> speaker_embeddings
+            speaker_mapping: Dict of (chunk_path, local_speaker) -> global_speaker_id
+            
+        Returns:
+            BytesIO: PNG image buffer, or None on failure
+        """
+        try:
+            # Prepare data
+            embeddings = []
+            speaker_labels = []
+            global_ids = []
+
+            for chunk_path, speakers in all_speaker_data.items():
+                for local_speaker, data in speakers.items():
+                    global_id = speaker_mapping.get((chunk_path, local_speaker), "unknown")
+                    embeddings.append(data['embedding'])
+                    speaker_labels.append(local_speaker)
+                    global_ids.append(global_id)
+
+            if len(embeddings) < 3:
+                print("Not enough data for visualization")
+                return None
+
+            X = np.vstack(embeddings)
+            unique_global = sorted(set(global_ids))
+
+            fig, axes = plt.subplots(2, 2, figsize=(20, 16))
+            fig.suptitle(
+                f'Speaker Clustering Visualization - {len(unique_global)} Global Speakers',
+                fontsize=16, fontweight='bold'
+            )
+
+            # t-SNE
+            tsne = TSNE(n_components=2, random_state=42, perplexity=min(30, len(X) - 1))
+            X_tsne = tsne.fit_transform(X)
+
+            # PCA
+            pca = PCA(n_components=2)
+            X_pca = pca.fit_transform(X)
+
+            colors = plt.cm.Set3(np.linspace(0, 1, len(unique_global)))
+            color_map = {spk: colors[i] for i, spk in enumerate(unique_global)}
+
+            # Plot 1: t-SNE
+            ax1 = axes[0, 0]
+            for global_id in unique_global:
+                mask = np.array(global_ids) == global_id
+                if np.sum(mask) > 0:
+                    ax1.scatter(X_tsne[mask, 0], X_tsne[mask, 1],
+                                c=[color_map[global_id]], label=global_id, alpha=0.7, s=60)
+            ax1.set_title(f't-SNE: {len(unique_global)} Global Speaker Clusters')
+            ax1.set_xlabel('t-SNE 1')
+            ax1.set_ylabel('t-SNE 2')
+            ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            ax1.grid(True, alpha=0.3)
+
+            # Plot 2: PCA
+            ax2 = axes[0, 1]
+            for global_id in unique_global:
+                mask = np.array(global_ids) == global_id
+                if np.sum(mask) > 0:
+                    ax2.scatter(X_pca[mask, 0], X_pca[mask, 1],
+                                c=[color_map[global_id]], label=global_id, alpha=0.7, s=60)
+            ax2.set_title(f'PCA: {len(unique_global)} Global Speaker Clusters')
+            ax2.set_xlabel(f'PC1 ({pca.explained_variance_ratio_[0]:.1%} variance)')
+            ax2.set_ylabel(f'PC2 ({pca.explained_variance_ratio_[1]:.1%} variance)')
+            ax2.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            ax2.grid(True, alpha=0.3)
+
+            # Plot 3: Cosine Similarity
+            ax3 = axes[1, 0]
+            from sklearn.metrics.pairwise import cosine_similarity
+            similarity_matrix = cosine_similarity(X)
+            
+            global_indices = {}
+            for i, gid in enumerate(global_ids):
+                global_indices.setdefault(gid, []).append(i)
+            
+            sorted_indices = []
+            for gid in unique_global:
+                if gid in global_indices:
+                    sorted_indices.extend(global_indices[gid])
+            
+            if sorted_indices:
+                sorted_sim = similarity_matrix[np.ix_(sorted_indices, sorted_indices)]
+                im = ax3.imshow(sorted_sim, cmap='RdYlBu', aspect='auto')
+                ax3.set_title('Cosine Similarity Matrix')
+                ax3.set_xlabel('Speaker Segments')
+                ax3.set_ylabel('Speaker Segments')
+                plt.colorbar(im, ax=ax3)
+
+            # Plot 4: Cluster sizes
+            ax4 = axes[1, 1]
+            cluster_sizes = {}
+            for gid in global_ids:
+                cluster_sizes[gid] = cluster_sizes.get(gid, 0) + 1
+            valid_clusters = [s for s in unique_global if s in cluster_sizes]
+            valid_sizes = [cluster_sizes[s] for s in valid_clusters]
+            if valid_clusters:
+                bars = ax4.bar(valid_clusters, valid_sizes,
+                               color=[color_map[s] for s in valid_clusters])
+                ax4.set_title(f'Cluster Sizes ({len(valid_clusters)} Speakers)')
+                ax4.set_xlabel('Global Speaker ID')
+                ax4.set_ylabel('Number of Segments')
+                ax4.tick_params(axis='x', rotation=45)
+                for bar, size in zip(bars, valid_sizes):
+                    ax4.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.1,
+                             str(size), ha='center', va='bottom')
+
+            plt.tight_layout()
+
+            # Save to BytesIO buffer
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+            plt.close(fig)
+            buf.seek(0)
+
+            print(f"Cluster visualization generated to buffer ({buf.getbuffer().nbytes} bytes)")
+            return buf
+
+        except Exception as e:
+            print(f"Visualization buffer error: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
 
     def print_cluster_statistics(self, all_speaker_data, speaker_mapping):
         """Print clustering statistics."""

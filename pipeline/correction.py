@@ -128,23 +128,37 @@ def correct_text(input_text, correction_model, correction_tokenizer):
         return input_text, False
 
 
-def perform_correction(input_txt_path, output_txt_path):
+def perform_correction(input_txt_path=None, output_txt_path=None, summarization_df=None,
+                       correction_model=None, correction_tokenizer=None,
+                       progress_callback=None):
     """Perform text correction on summarization results.
     
     Args:
-        input_txt_path: Path to input text file with summarization results
-        output_txt_path: Path for output text file with corrected summaries
+        input_txt_path: Path to input text file with summarization results (CLI mode)
+        output_txt_path: Path for output text file with corrected summaries (CLI mode)
+        summarization_df: DataFrame with summarization results (bot mode, skips TXT parsing)
+        correction_model: Optional pre-loaded model (for bot mode)
+        correction_tokenizer: Optional pre-loaded tokenizer (for bot mode)
+        progress_callback: Optional callback function for progress updates
         
     Returns:
         DataFrame: DataFrame with corrected summaries
     """
     start_time = time.time()
     
-    print("Loading correction model...")
-    correction_model, correction_tokenizer = load_correction_model()
+    if correction_model is None or correction_tokenizer is None:
+        print("Loading correction model...")
+        correction_model, correction_tokenizer = load_correction_model()
     
-    # Parse summarization data from text file
-    input_dataframe = parse_summarization_from_txt(input_txt_path)
+    # Use provided DataFrame or parse from TXT file
+    if summarization_df is not None:
+        input_dataframe = summarization_df.copy()
+        print("Using provided summarization DataFrame...")
+    elif input_txt_path:
+        input_dataframe = parse_summarization_from_txt(input_txt_path)
+    else:
+        print("No summarization data provided")
+        return pd.DataFrame()
     
     if input_dataframe.empty:
         print("No summarization data found to correct")
@@ -172,8 +186,9 @@ def perform_correction(input_txt_path, output_txt_path):
     
     input_dataframe["corrected_summary"] = corrected_summaries
     
-    # Save to text file
-    save_correction_to_txt(input_dataframe, output_txt_path)
+    # Save to text file only if path provided (CLI mode)
+    if output_txt_path:
+        save_correction_to_txt(input_dataframe, output_txt_path)
     
     total_execution_time = time.time() - start_time
     print(f"Summarization correction completed in {total_execution_time:.2f} seconds")

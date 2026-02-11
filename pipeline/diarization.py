@@ -29,15 +29,27 @@ def save_diarization_to_txt(dataframe, output_txt_path):
             file.write("-" * 30 + "\n")
 
 
-def perform_diarization(audio_file_path, output_txt_path):
-    """Perform speaker diarization on audio file."""
+def perform_diarization(audio_file_path, output_txt_path=None, diarization_model=None,
+                        progress_callback=None):
+    """Perform speaker diarization on audio file.
+    
+    Args:
+        audio_file_path: Path to input audio file
+        output_txt_path: Optional path for output text file (for CLI compatibility)
+        diarization_model: Optional pre-loaded diarization model (for bot mode)
+        progress_callback: Optional callback function for progress updates
+        
+    Returns:
+        DataFrame: DataFrame with diarization results
+    """
     start_time = time.time()
     
-    print("Loading diarization model...")
-    diarization_pipeline = load_diarization_model()
+    if diarization_model is None:
+        print("Loading diarization model...")
+        diarization_model = load_diarization_model()
     
     print("Performing diarization...")
-    diarization = diarization_pipeline(audio_file_path)
+    diarization = diarization_model(audio_file_path)
     audio = AudioSegment.from_file(audio_file_path)
     
     segments = []
@@ -60,8 +72,9 @@ def perform_diarization(audio_file_path, output_txt_path):
     if not results_dataframe.empty:
         results_dataframe = results_dataframe.sort_values("start_time").reset_index(drop=True)
         
-        # Save to text file
-        save_diarization_to_txt(results_dataframe, output_txt_path)
+        # Save to text file only if path provided (CLI mode)
+        if output_txt_path:
+            save_diarization_to_txt(results_dataframe, output_txt_path)
         
         execution_time = time.time() - start_time
         print(f"Diarization completed in {execution_time:.2f} seconds")

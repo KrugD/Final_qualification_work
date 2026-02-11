@@ -170,24 +170,38 @@ def transcribe_audio_segments(segments, asr_pipeline):
     return results
 
 
-def perform_speech_recognition(audio_file_path, diarization_txt_path, output_txt_path):
+def perform_speech_recognition(audio_file_path, diarization_txt_path=None,
+                                output_txt_path=None, diarization_df=None,
+                                asr_model=None, progress_callback=None):
     """Perform speech recognition on diarized segments.
     
     Args:
         audio_file_path: Path to input audio file
-        diarization_txt_path: Path to text file with diarization results
-        output_txt_path: Path for output text file
+        diarization_txt_path: Path to text file with diarization results (CLI mode)
+        output_txt_path: Path for output text file (CLI mode)
+        diarization_df: DataFrame with diarization results (bot mode, skips TXT parsing)
+        asr_model: Optional pre-loaded ASR model (for bot mode)
+        progress_callback: Optional callback function for progress updates
         
     Returns:
         DataFrame: DataFrame with transcription results
     """
     start_time = time.time()
     
-    print("Loading ASR model...")
-    asr_pipeline = load_asr_model()
+    if asr_model is None:
+        print("Loading ASR model...")
+        asr_model = load_asr_model()
     
-    print("Loading diarization results...")
-    diarization_dataframe = parse_diarization_from_txt(diarization_txt_path)
+    # Use provided DataFrame or parse from TXT file
+    if diarization_df is not None:
+        diarization_dataframe = diarization_df
+        print("Using provided diarization DataFrame...")
+    elif diarization_txt_path:
+        print("Loading diarization results from file...")
+        diarization_dataframe = parse_diarization_from_txt(diarization_txt_path)
+    else:
+        print("No diarization data provided")
+        return pd.DataFrame()
     
     if diarization_dataframe.empty:
         print("No diarization data found")
@@ -199,15 +213,16 @@ def perform_speech_recognition(audio_file_path, diarization_txt_path, output_txt
     audio_segments = extract_audio_segments(audio_file_path, diarization_dataframe)
     
     print(f"Transcribing {len(audio_segments)} segments...")
-    transcription_results = transcribe_audio_segments(audio_segments, asr_pipeline)
+    transcription_results = transcribe_audio_segments(audio_segments, asr_model)
     
     results_dataframe = pd.DataFrame(transcription_results)
     
     if not results_dataframe.empty:
         results_dataframe = results_dataframe.sort_values("start_time").reset_index(drop=True)
         
-        # Save to text file
-        save_asr_to_txt(results_dataframe, output_txt_path)
+        # Save to text file only if path provided (CLI mode)
+        if output_txt_path:
+            save_asr_to_txt(results_dataframe, output_txt_path)
         
         execution_time = time.time() - start_time
         print(f"Speech recognition completed in {execution_time:.2f} seconds")

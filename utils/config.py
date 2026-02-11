@@ -40,6 +40,29 @@ class ModelConfig:
     MIN_SILENCE_LEN_MS = 2000  # 2 seconds minimum silence
     SILENCE_THRESH_DB = -40    # Silence threshold in dB
 
+
+class BotConfig:
+    """Configuration class for Telegram bot."""
+    
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+    TELEGRAM_API_ID = os.getenv("TELEGRAM_API_ID")
+    TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH")
+    
+    # Telegram Bot API Local Server (for files up to 2 GB)
+    USE_LOCAL_API = os.getenv("USE_LOCAL_API", "true").lower() == "true"
+    LOCAL_API_BASE_URL = os.getenv("LOCAL_API_BASE_URL", "http://localhost:8081")
+    
+    # Redis
+    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    
+    # Processing limits
+    MAX_FILE_SIZE_MB = 2000  # 2 GB with Local API Server
+    MAX_HISTORY_PER_USER = 20
+    
+    # Supported audio formats
+    SUPPORTED_AUDIO_FORMATS = {".wav", ".mp3", ".ogg", ".flac", ".m4a", ".opus", ".wma", ".aac"}
+
+
 def get_device():
     """Get available device (CUDA or CPU)."""
     return "cuda:0" if torch.cuda.is_available() else "cpu"
