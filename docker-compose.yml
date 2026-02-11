@@ -29,6 +29,11 @@ services:
       TELEGRAM_LOCAL: "true"
     volumes:
       - /var/lib/telegram-bot-api:/var/lib/telegram-bot-api
+    command: >
+      telegram-bot-api
+      --dir=/var/lib/telegram-bot-api
+      --temp-dir=/tmp/telegram-bot-api
+      --http-port=8081
     restart: unless-stopped
 
 volumes:

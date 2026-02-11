@@ -1,6 +1,7 @@
 """Redis client wrapper for task queue, status tracking, and user history."""
 
 import json
+import os
 import uuid
 import time
 from datetime import datetime
@@ -39,7 +40,8 @@ class RedisClient:
     # ---- Task Queue ----
     
     async def add_task(self, user_id: int, chat_id: int, file_path: str,
-                       original_filename: str, file_size: int = 0) -> str:
+                       original_filename: str, file_size: int = 0,
+                       progress_message_id: int = 0) -> str:
         """Add a new task to the processing queue.
         
         Returns:
@@ -54,6 +56,7 @@ class RedisClient:
             "file_path": file_path,
             "original_filename": original_filename,
             "file_size": str(file_size),
+            "progress_message_id": str(progress_message_id),
             "status": "queued",
             "stage": "",
             "progress": "0",
@@ -174,6 +177,53 @@ class RedisClient:
         key = f"{self.USER_HISTORY_PREFIX}{user_id}"
         records = await self.redis.lrange(key, 0, limit - 1)
         return [json.loads(r) for r in records]
+    
+    async def clear_history(self, user_id: int):
+        """Clear user's processing history."""
+        key = f"{self.USER_HISTORY_PREFIX}{user_id}"
+        await self.redis.delete(key)
+    
+    # ---- User Task Management ----
+    
+    async def cancel_user_tasks(self, user_id: int) -> bool:
+        """Cancel all queued and processing tasks for a user. Returns True if any were cancelled."""
+        cancelled = False
+        
+        # 1. Cancel tasks in queue
+        queue = await self.redis.lrange(self.QUEUE_KEY, 0, -1)
+        for task_id in queue:
+            task_data = await self.redis.hgetall(f"{self.TASK_PREFIX}{task_id}")
+            if task_data and task_data.get("user_id") == str(user_id):
+                removed = await self.redis.lrem(self.QUEUE_KEY, 1, task_id)
+                if removed:
+                    await self.redis.hset(f"{self.TASK_PREFIX}{task_id}", mapping={
+                        "status": "cancelled",
+                        "completed_at": datetime.now().isoformat(),
+                    })
+                    file_path = task_data.get("file_path", "")
+                    if file_path and os.path.isfile(file_path):
+                        try:
+                            os.remove(file_path)
+                        except OSError:
+                            pass
+                    cancelled = True
+        
+        # 2. Cancel currently processing task if it belongs to user
+        processing_task_id = await self.redis.get(self.PROCESSING_KEY)
+        if processing_task_id:
+            task_data = await self.redis.hgetall(f"{self.TASK_PREFIX}{processing_task_id}")
+            if task_data and task_data.get("user_id") == str(user_id):
+                await self.redis.hset(f"{self.TASK_PREFIX}{processing_task_id}", mapping={
+                    "status": "cancelling",
+                })
+                cancelled = True
+        
+        return cancelled
+    
+    async def is_task_cancelled(self, task_id: str) -> bool:
+        """Check if a task has been marked for cancellation."""
+        task_data = await self.redis.hgetall(f"{self.TASK_PREFIX}{task_id}")
+        return task_data.get("status") == "cancelling"
 
 
 # Singleton instance

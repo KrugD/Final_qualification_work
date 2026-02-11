@@ -200,6 +200,9 @@ def run_pipeline_in_memory(audio_file_path, force_clustering=False,
         return result
         
     except Exception as e:
+        # Re-raise cancellation errors so the worker can handle them
+        if "cancelled" in str(e).lower():
+            raise
         print(f"Pipeline error: {e}")
         import traceback
         traceback.print_exc()

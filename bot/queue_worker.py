@@ -16,6 +16,11 @@ from bot.pdf_generator import generate_protocol_pdf
 from utils.config import BotConfig
 
 
+class CancelledError(Exception):
+    """Raised when a task is cancelled by the user."""
+    pass
+
+
 class QueueWorker:
     """Background worker that processes audio tasks from Redis queue."""
     
@@ -57,12 +62,14 @@ class QueueWorker:
         user_id = int(task["user_id"])
         file_path = task["file_path"]
         original_filename = task["original_filename"]
+        progress_message_id = int(task.get("progress_message_id", 0)) or None
         
         print(f"Processing task {task_id}: {original_filename} for user {user_id}")
         
-        # Create progress notifier
-        notifier = ProgressNotifier(self.bot, chat_id)
-        await notifier.send_initial(queue_position=0)
+        # Reuse existing progress message from handler
+        notifier = ProgressNotifier(self.bot, chat_id, message_id=progress_message_id)
+        if not progress_message_id:
+            await notifier.send_initial(queue_position=0)
         await notifier.update_processing_started()
         
         wav_path = None
@@ -80,19 +87,45 @@ class QueueWorker:
             
             def progress_callback(stage: str, percent: int):
                 """Sync callback called from pipeline, bridges to async notifier."""
+                # Check if task was cancelled
+                future = asyncio.run_coroutine_threadsafe(
+                    redis_client.is_task_cancelled(task_id), loop
+                )
+                try:
+                    if future.result(timeout=5):
+                        raise CancelledError(f"Task {task_id} cancelled by user")
+                except CancelledError:
+                    raise
+                except Exception:
+                    pass
+                
                 asyncio.run_coroutine_threadsafe(
                     self._update_progress(task_id, stage, percent, notifier),
                     loop
                 )
             
             # Run heavy pipeline in a thread
-            result = await asyncio.to_thread(
-                run_pipeline_in_memory,
-                wav_path,
-                force_clustering=False,
-                progress_callback=progress_callback,
-                preloaded_models=self.preloaded_models,
-            )
+            try:
+                result = await asyncio.to_thread(
+                    run_pipeline_in_memory,
+                    wav_path,
+                    force_clustering=False,
+                    progress_callback=progress_callback,
+                    preloaded_models=self.preloaded_models,
+                )
+            except (CancelledError, Exception) as e:
+                if "cancelled" not in str(e).lower():
+                    raise  # Re-raise non-cancellation errors
+                print(f"Task {task_id} cancelled by user during processing")
+                await redis_client.complete_task(task_id, success=False, error="Cancelled")
+                # Also cancel any remaining queued tasks from this user
+                await redis_client.cancel_user_tasks(user_id)
+                # Edit the existing progress message instead of sending a new one
+                try:
+                    await notifier.update_cancelled()
+                except Exception:
+                    pass
+                return
             
             if not result["success"]:
                 await notifier.update_stage("error")

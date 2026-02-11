@@ -40,6 +40,13 @@ def _build_progress_bar(percent: int, width: int = 16) -> str:
 def _build_stage_list(current_stage: str) -> str:
     """Build a checklist of stages showing completed, current, and pending."""
     lines = []
+    
+    # If done, mark everything as completed
+    if current_stage == "done":
+        for stage_key in STAGE_ORDER:
+            lines.append(f"✅ {STAGES[stage_key]['label']}")
+        return "\n".join(lines)
+    
     current_found = False
     
     for stage_key in STAGE_ORDER:
@@ -141,6 +148,14 @@ class ProgressNotifier:
         
         await self._edit_message(text)
     
+    async def update_cancelled(self):
+        """Update the progress message to show cancellation (edits in-place, no new message)."""
+        text = (
+            "🚫 <b>Обработка отменена</b>\n\n"
+            "Текущий этап завершён, обработка остановлена."
+        )
+        await self._edit_message(text)
+
     async def update_processing_started(self):
         """Notify that processing has started (was in queue before)."""
         text = (
