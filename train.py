@@ -114,6 +114,10 @@ def evaluate(
                     input_ids=batch["input_ids"],
                     attention_mask=batch["attention_mask"],
                     max_length=batch["labels"].shape[1],
+                    num_inference_steps=10,
+                    temperature=0.9,
+                    top_k=50,
+                    sample=True,
                 )
                 
                 # Decode predictions, references, and sources
@@ -303,18 +307,21 @@ def train(config: Dict[str, Any], resume_from: Optional[str] = None):
                 
                 # Gradient clipping (only when gradients are synced)
                 if accelerator.sync_gradients:
-                    # Compute gradient norm BEFORE clipping and zero_grad
-                    _grad_norm = 0.0
-                    for p in model.parameters():
-                        if p.grad is not None:
-                            _grad_norm += p.grad.data.norm(2).item() ** 2
-                    _grad_norm = _grad_norm ** 0.5
-                    
                     if config["training"].get("max_grad_norm"):
-                        accelerator.clip_grad_norm_(
+                        # clip_grad_norm_ returns the UNSCALED total norm
+                        # (handles fp16 GradScaler internally)
+                        _grad_norm = accelerator.clip_grad_norm_(
                             model.parameters(),
                             config["training"]["max_grad_norm"],
                         )
+                        if isinstance(_grad_norm, torch.Tensor):
+                            _grad_norm = _grad_norm.item()
+                    else:
+                        _grad_norm = 0.0
+                        for p in model.parameters():
+                            if p.grad is not None:
+                                _grad_norm += p.grad.data.norm(2).item() ** 2
+                        _grad_norm = _grad_norm ** 0.5
                 
                 optimizer.step()
                 scheduler.step()

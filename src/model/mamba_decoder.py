@@ -89,7 +89,12 @@ class MambaBlock(nn.Module):
 class FallbackMamba(nn.Module):
     """
     Fallback implementation when mamba-ssm is not available.
-    Uses gated convolution to approximate Mamba behavior.
+    Uses BIDIRECTIONAL gated convolution for masked diffusion models.
+    
+    Key change vs original: conv1d uses symmetric (center) padding instead of
+    causal (left-only) padding, allowing each position to see both left and
+    right context. This is critical for masked diffusion where tokens can be
+    unmasked at any position, not just left-to-right.
     """
     
     def __init__(
@@ -102,16 +107,17 @@ class FallbackMamba(nn.Module):
         super().__init__()
         
         inner_size = hidden_size * expand_factor
+        self.conv_kernel = conv_kernel
         
         # Input projection
         self.in_proj = nn.Linear(hidden_size, inner_size * 2)
         
-        # Causal convolution
+        # Bidirectional convolution (symmetric padding)
         self.conv = nn.Conv1d(
             inner_size,
             inner_size,
             kernel_size=conv_kernel,
-            padding=conv_kernel - 1,
+            padding=conv_kernel - 1,  # Full padding, will center-crop in forward
             groups=inner_size,
         )
         
@@ -131,9 +137,13 @@ class FallbackMamba(nn.Module):
         xz = self.in_proj(x)
         x, z = xz.chunk(2, dim=-1)
         
-        # Causal convolution
+        # Bidirectional convolution: center crop to preserve seq_len
         x = x.transpose(1, 2)  # [B, D, L]
-        x = self.conv(x)[:, :, :seq_len]  # Causal: remove future
+        x = self.conv(x)
+        # Center crop: remove equal padding from both sides
+        extra = x.size(2) - seq_len
+        left = extra // 2
+        x = x[:, :, left:left + seq_len]
         x = x.transpose(1, 2)  # [B, L, D]
         
         x = self.act(x)
@@ -201,10 +211,16 @@ class CrossAttention(nn.Module):
 class CrossMambaLayer(nn.Module):
     """
     CrossMamba layer combining:
-    1. Mamba block for sequence modeling
-    2. Cross-attention to encoder
-    3. Timestep conditioning (AdaLN-style)
-    4. Feed-forward network
+    1. Mamba block for local sequence modeling (bidirectional conv)
+    2. Self-attention for global bidirectional target context
+    3. Cross-attention to encoder
+    4. Timestep conditioning (AdaLN-style)
+    5. Feed-forward network
+    
+    The self-attention is critical for masked diffusion: it allows each
+    position to attend to ALL other target positions (both left and right),
+    enabling the model to use already-unmasked tokens at any position as
+    context for predicting masked tokens.
     """
     
     def __init__(
@@ -219,7 +235,7 @@ class CrossMambaLayer(nn.Module):
     ):
         super().__init__()
         
-        # Mamba block
+        # Mamba block (local bidirectional processing)
         self.mamba = MambaBlock(
             hidden_size=hidden_size,
             state_size=state_size,
@@ -228,7 +244,17 @@ class CrossMambaLayer(nn.Module):
             dropout=dropout,
         )
         
-        # Cross-attention
+        # Self-attention for bidirectional target context
+        self.self_attn_norm = nn.LayerNorm(hidden_size)
+        self.self_attn = nn.MultiheadAttention(
+            hidden_size,
+            num_heads,
+            dropout=dropout,
+            batch_first=True,
+        )
+        self.self_attn_dropout = nn.Dropout(dropout)
+        
+        # Cross-attention to encoder
         self.cross_attn = CrossAttention(
             hidden_size=hidden_size,
             num_heads=num_heads,
@@ -245,7 +271,9 @@ class CrossMambaLayer(nn.Module):
             nn.Dropout(dropout),
         )
         
-        # Timestep conditioning (AdaLN)
+        # Timestep conditioning (AdaLN) — 6 params for mamba/cross/ffn
+        # Self-attention does not need separate timestep conditioning since
+        # the input already carries timestep info from the mamba block
         self.timestep_proj = nn.Linear(hidden_size, hidden_size * 6)
     
     def forward(
@@ -253,6 +281,7 @@ class CrossMambaLayer(nn.Module):
         hidden_states: torch.Tensor,
         encoder_hidden_states: torch.Tensor,
         timestep_emb: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
         encoder_attention_mask: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         # Timestep conditioning: 6 parameters (scale, shift for each of 3 blocks)
@@ -260,11 +289,23 @@ class CrossMambaLayer(nn.Module):
         scale_mamba, shift_mamba, scale_cross, shift_cross, scale_ffn, shift_ffn = \
             timestep_cond.chunk(6, dim=-1)
         
-        # Mamba block with timestep modulation
+        # 1. Mamba block with timestep modulation (local processing)
         hidden_states = hidden_states * (1 + scale_mamba) + shift_mamba
         hidden_states = self.mamba(hidden_states)
         
-        # Cross-attention with timestep modulation
+        # 2. Self-attention (global bidirectional target context)
+        residual = hidden_states
+        hidden_states = self.self_attn_norm(hidden_states)
+        key_padding_mask = None
+        if attention_mask is not None:
+            key_padding_mask = ~attention_mask.bool()
+        hidden_states, _ = self.self_attn(
+            hidden_states, hidden_states, hidden_states,
+            key_padding_mask=key_padding_mask,
+        )
+        hidden_states = self.self_attn_dropout(hidden_states) + residual
+        
+        # 3. Cross-attention with timestep modulation
         hidden_states = hidden_states * (1 + scale_cross) + shift_cross
         hidden_states = self.cross_attn(
             hidden_states,
@@ -272,7 +313,7 @@ class CrossMambaLayer(nn.Module):
             encoder_attention_mask,
         )
         
-        # FFN with timestep modulation
+        # 4. FFN with timestep modulation
         residual = hidden_states
         hidden_states = self.ffn_norm(hidden_states)
         hidden_states = hidden_states * (1 + scale_ffn) + shift_ffn
@@ -371,7 +412,8 @@ class CrossMambaDecoder(nn.Module):
                 hidden_states,
                 encoder_hidden_states,
                 timestep_emb,
-                encoder_attention_mask,
+                attention_mask=attention_mask,
+                encoder_attention_mask=encoder_attention_mask,
             )
         
         # Project to vocabulary

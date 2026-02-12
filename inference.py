@@ -341,8 +341,8 @@ def main():
                         help="Path to model weights (auto-detected if not set)")
     parser.add_argument("--device", type=str, default=None,
                         help="Device (auto-detect if not set)")
-    parser.add_argument("--steps", type=int, default=20,
-                        help="Number of inference steps (default: 20)")
+    parser.add_argument("--steps", type=int, default=10,
+                        help="Number of inference steps (default: 10, paper uses 10)")
     parser.add_argument("--temperature", type=float, default=1.0,
                         help="Temperature for generation (default: 1.0)")
     parser.add_argument("--top_k", type=int, default=None,
