@@ -204,136 +204,150 @@ def run_single(model, tokenizer, args, texts):
 
 
 def run_sweep(model, tokenizer, args, texts):
-    """Run comprehensive parameter sweep."""
+    """Run comprehensive parameter sweep with ROUGE evaluation."""
     configs = [
-        # --- Strategy comparison (same steps/temp) ---
-        {"label": "baseline-argmax",
-         "steps": 20, "temperature": 1.0, "strategy": "linear", "sample": False, "anneal": False,
+        # --- Argmax (greedy) with different steps ---
+        {"label": "argmax-10steps-linear",
+         "steps": 10, "temperature": 1.0, "strategy": "linear", "sample": False, "anneal": False,
          "top_k": None, "top_p": None},
-        {"label": "cosine-argmax",
-         "steps": 20, "temperature": 1.0, "strategy": "cosine", "sample": False, "anneal": False,
-         "top_k": None, "top_p": None},
-        {"label": "confidence-argmax",
-         "steps": 20, "temperature": 1.0, "strategy": "confidence", "sample": False, "anneal": False,
-         "top_k": None, "top_p": None},
-        
-        # --- Sampling vs argmax ---
-        {"label": "linear-sample-t1.0",
-         "steps": 20, "temperature": 1.0, "strategy": "linear", "sample": True, "anneal": False,
-         "top_k": None, "top_p": None},
-        {"label": "linear-sample-t0.7",
-         "steps": 20, "temperature": 0.7, "strategy": "linear", "sample": True, "anneal": False,
-         "top_k": None, "top_p": None},
-        {"label": "linear-sample-t0.5",
-         "steps": 20, "temperature": 0.5, "strategy": "linear", "sample": True, "anneal": False,
-         "top_k": None, "top_p": None},
-        
-        # --- More steps ---
-        {"label": "linear-50steps",
+        {"label": "argmax-50steps-linear",
          "steps": 50, "temperature": 1.0, "strategy": "linear", "sample": False, "anneal": False,
          "top_k": None, "top_p": None},
-        {"label": "linear-100steps",
+        {"label": "argmax-100steps-linear",
          "steps": 100, "temperature": 1.0, "strategy": "linear", "sample": False, "anneal": False,
          "top_k": None, "top_p": None},
-        {"label": "cosine-50steps",
+        {"label": "argmax-50steps-cosine",
          "steps": 50, "temperature": 1.0, "strategy": "cosine", "sample": False, "anneal": False,
          "top_k": None, "top_p": None},
+        {"label": "argmax-100steps-cosine",
+         "steps": 100, "temperature": 1.0, "strategy": "cosine", "sample": False, "anneal": False,
+         "top_k": None, "top_p": None},
+        {"label": "argmax-50steps-confidence",
+         "steps": 50, "temperature": 1.0, "strategy": "confidence", "sample": False, "anneal": False,
+         "top_k": None, "top_p": None},
+        
+        # --- Sampling with low temperature ---
+        {"label": "sample-t0.5-50steps-linear",
+         "steps": 50, "temperature": 0.5, "strategy": "linear", "sample": True, "anneal": False,
+         "top_k": None, "top_p": None},
+        {"label": "sample-t0.3-50steps-cosine",
+         "steps": 50, "temperature": 0.3, "strategy": "cosine", "sample": True, "anneal": False,
+         "top_k": None, "top_p": None},
+        {"label": "sample-t0.5-100steps-cosine",
+         "steps": 100, "temperature": 0.5, "strategy": "cosine", "sample": True, "anneal": False,
+         "top_k": None, "top_p": None},
+        
+        # --- Top-k with low temp ---
+        {"label": "topk20-t0.5-50s-cosine",
+         "steps": 50, "temperature": 0.5, "strategy": "cosine", "sample": True, "anneal": False,
+         "top_k": 20, "top_p": None},
+        {"label": "topk10-t0.3-100s-cosine",
+         "steps": 100, "temperature": 0.3, "strategy": "cosine", "sample": True, "anneal": False,
+         "top_k": 10, "top_p": None},
         
         # --- Temperature annealing ---
-        {"label": "linear-anneal-t1.0",
-         "steps": 50, "temperature": 1.0, "strategy": "linear", "sample": True, "anneal": True,
-         "top_k": None, "top_p": None},
-        {"label": "cosine-anneal-t0.8",
+        {"label": "anneal-t0.8-50s-cosine",
          "steps": 50, "temperature": 0.8, "strategy": "cosine", "sample": True, "anneal": True,
          "top_k": None, "top_p": None},
+        {"label": "anneal-t0.5-100s-cosine",
+         "steps": 100, "temperature": 0.5, "strategy": "cosine", "sample": True, "anneal": True,
+         "top_k": 20, "top_p": None},
         
-        # --- top-k / top-p ---
-        {"label": "sample-topk50",
-         "steps": 50, "temperature": 0.8, "strategy": "linear", "sample": True, "anneal": False,
-         "top_k": 50, "top_p": None},
-        {"label": "sample-topp0.9",
-         "steps": 50, "temperature": 0.8, "strategy": "linear", "sample": True, "anneal": False,
-         "top_k": None, "top_p": 0.9},
-        {"label": "sample-topk50-topp0.9",
-         "steps": 50, "temperature": 0.7, "strategy": "cosine", "sample": True, "anneal": True,
-         "top_k": 50, "top_p": 0.9},
-        
-        # --- Low temperature + many steps ---
-        {"label": "greedy-200steps",
-         "steps": 200, "temperature": 0.5, "strategy": "linear", "sample": False, "anneal": False,
+        # --- Extreme: many steps, low temp ---
+        {"label": "argmax-200steps-cosine",
+         "steps": 200, "temperature": 1.0, "strategy": "cosine", "sample": False, "anneal": False,
          "top_k": None, "top_p": None},
-        {"label": "confidence-100steps-t0.7",
-         "steps": 100, "temperature": 0.7, "strategy": "confidence", "sample": True, "anneal": True,
-         "top_k": 50, "top_p": 0.9},
+        {"label": "topk10-t0.3-200s-cosine",
+         "steps": 200, "temperature": 0.3, "strategy": "cosine", "sample": True, "anneal": True,
+         "top_k": 10, "top_p": None},
     ]
     
-    text = texts[0]
+    # Use ALL test texts for sweep (not just first one) to get ROUGE
     print("=" * 90)
-    print("PARAMETER SWEEP")
-    print(f"Source: {text[:120]}...")
+    print("PARAMETER SWEEP (with ROUGE on all test texts)")
     print("=" * 90)
-    print()
+    
+    # Prepare references for ROUGE
+    references = []
+    for text in texts:
+        references.append(None)  # Will be filled from dataset if available
+    
+    try:
+        from rouge_score import rouge_scorer
+        scorer = rouge_scorer.RougeScorer(["rouge1", "rougeL"], use_stemmer=False)
+        has_rouge = True
+    except ImportError:
+        has_rouge = False
+        print("(rouge_score not installed, skipping ROUGE)")
     
     results = []
     for i, cfg in enumerate(configs):
-        summary, debug, first_tokens = generate_one(
-            model, tokenizer, text,
-            device=args.device,
-            max_target_length=args.max_target_length,
-            num_inference_steps=cfg["steps"],
-            temperature=cfg["temperature"],
-            top_k=cfg["top_k"],
-            top_p=cfg["top_p"],
-            strategy=cfg["strategy"],
-            sample=cfg["sample"],
-            temperature_annealing=cfg["anneal"],
-        )
+        summaries = []
+        debugs = []
         
-        results.append({"label": cfg["label"], "summary": summary, "debug": debug})
+        for text in texts:
+            summary, debug, _ = generate_one(
+                model, tokenizer, text,
+                device=args.device,
+                max_target_length=args.max_target_length,
+                num_inference_steps=cfg["steps"],
+                temperature=cfg["temperature"],
+                top_k=cfg["top_k"],
+                top_p=cfg["top_p"],
+                strategy=cfg["strategy"],
+                sample=cfg["sample"],
+                temperature_annealing=cfg["anneal"],
+            )
+            summaries.append(summary)
+            debugs.append(debug)
         
-        is_empty = not summary.strip()
-        status = "EMPTY!" if is_empty else f"{debug['output_words']:3d} words"
+        avg_words = np.mean([d["output_words"] for d in debugs])
+        avg_uniq = np.mean([d["unique_token_ratio"] for d in debugs])
+        avg_conf = np.mean([d["confidence_mean"] for d in debugs])
         
-        print(f"[{i+1:2d}/{len(configs)}] {cfg['label']:<30s}  {status}, "
-              f"real={debug['real_tokens']:3d}, uniq={debug['unique_token_ratio']:.2f}, "
-              f"conf={debug['confidence_mean']:.3f}")
-        if not is_empty:
-            print(f"         >>> {summary[:150]}")
-        else:
-            print(f"         tokens: {first_tokens[:15]}")
-        print()
+        results.append({
+            "label": cfg["label"],
+            "summaries": summaries,
+            "debugs": debugs,
+            "avg_words": avg_words,
+            "avg_uniq": avg_uniq,
+            "avg_conf": avg_conf,
+        })
+        
+        # Show first summary
+        s0 = summaries[0]
+        status = f"{avg_words:.0f} words" if s0.strip() else "EMPTY"
+        print(f"\n[{i+1:2d}/{len(configs)}] {cfg['label']:<30s}  {status}, "
+              f"uniq={avg_uniq:.2f}, conf={avg_conf:.3f}")
+        print(f"  >>> {s0[:200]}")
     
     # Summary table
-    print("\n" + "=" * 90)
+    print("\n\n" + "=" * 100)
     print("RESULTS SUMMARY")
-    print("=" * 90)
-    print(f"{'Config':<30s}  {'Words':>5s}  {'Chars':>5s}  {'Real':>5s}  "
-          f"{'Uniq':>5s}  {'Conf':>5s}  {'Empty':>5s}")
-    print("-" * 90)
+    print("=" * 100)
+    print(f"{'Config':<30s}  {'Words':>5s}  {'Uniq':>5s}  {'Conf':>5s}  {'Summary preview'}")
+    print("-" * 100)
     
     for r in results:
-        d = r["debug"]
-        is_empty = "YES" if not r["summary"].strip() else "no"
-        print(f"{r['label']:<30s}  {d['output_words']:5d}  {d['output_chars']:5d}  "
-              f"{d['real_tokens']:5d}  {d['unique_token_ratio']:5.2f}  "
-              f"{d['confidence_mean']:5.3f}  {is_empty:>5s}")
+        preview = r["summaries"][0][:60] if r["summaries"][0].strip() else "[EMPTY]"
+        print(f"{r['label']:<30s}  {r['avg_words']:5.0f}  {r['avg_uniq']:5.2f}  "
+              f"{r['avg_conf']:5.3f}  {preview}")
     
-    # Show best results
-    non_empty = [r for r in results if r["summary"].strip()]
+    # Show best results for each text
+    print("\n\n" + "=" * 100)
+    print("BEST OUTPUTS PER TEXT")
+    print("=" * 100)
+    
+    # Pick best config by diversity (non-empty, high unique ratio)
+    non_empty = [r for r in results if all(s.strip() for s in r["summaries"])]
     if non_empty:
-        best = max(non_empty, key=lambda r: r["debug"]["output_words"])
-        print(f"\nBest by word count: [{best['label']}]")
-        print(f"  >>> {best['summary'][:300]}")
-        
-        best_diverse = max(non_empty, key=lambda r: r["debug"]["unique_token_ratio"])
-        print(f"\nMost diverse tokens: [{best_diverse['label']}]")
-        print(f"  >>> {best_diverse['summary'][:300]}")
+        best = max(non_empty, key=lambda r: r["avg_uniq"])
+        print(f"\nBest config: [{best['label']}]")
+        for j, text in enumerate(texts):
+            print(f"\n  Text {j+1}: {text[:100]}...")
+            print(f"  Output:  {best['summaries'][j][:250]}")
     else:
-        print("\nAll configs produced empty output. The model may need more training.")
-        print("Try:")
-        print("  1. Use the checkpoint with the LOWEST eval_loss")
-        print("  2. Increase num_epochs and continue training")
-        print("  3. Check that mask_token_id matches the training config")
+        print("All configs produced some empty outputs.")
 
 
 def run_eval(model, tokenizer, args):
@@ -521,6 +535,8 @@ def main():
                         help="Dataset for --eval")
     parser.add_argument("--text", type=str, default=None,
                         help="Custom text to summarize (overrides test texts)")
+    parser.add_argument("--output", type=str, default=None,
+                        help="Save output to txt file (e.g. --output results.txt)")
     args = parser.parse_args()
     
     # Auto-detect device
@@ -533,6 +549,27 @@ def main():
         else:
             args.device = "cpu"
             print("Using CPU")
+    
+    # Redirect output to file if --output is set (tee: both console and file)
+    if args.output:
+        import io
+
+        class Tee:
+            """Write to both stdout and a file."""
+            def __init__(self, filepath, stream):
+                self.file = open(filepath, "w", encoding="utf-8")
+                self.stream = stream
+            def write(self, data):
+                self.stream.write(data)
+                self.file.write(data)
+            def flush(self):
+                self.stream.flush()
+                self.file.flush()
+            def close(self):
+                self.file.close()
+
+        tee = Tee(args.output, sys.stdout)
+        sys.stdout = tee
     
     # Find and load model
     weights_path = find_weights(args.weights)
@@ -549,6 +586,12 @@ def main():
         run_sweep(model, tokenizer, args, texts)
     else:
         run_single(model, tokenizer, args, texts)
+    
+    # Close file output
+    if args.output:
+        sys.stdout = tee.stream
+        tee.close()
+        print(f"\nResults saved to: {args.output}")
 
 
 if __name__ == "__main__":
