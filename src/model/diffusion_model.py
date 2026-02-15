@@ -682,23 +682,23 @@ class MaskedDiffusionSummarizer(nn.Module):
         penalty: float,
     ) -> torch.Tensor:
         """
-        Apply repetition penalty: for tokens already in generated_ids,
-        divide positive logits by penalty and multiply negative logits by penalty.
-        This reduces the probability of repeating tokens.
+        Apply repetition penalty (vectorized).
+        For tokens already in generated_ids: positive logits /= penalty,
+        negative logits *= penalty.
         """
         for b in range(logits.shape[0]):
-            # Get unique tokens already placed (not mask)
             existing = generated_ids[b][generated_ids[b] != self.mask_token_id]
             if len(existing) == 0:
                 continue
             existing_unique = existing.unique()
             
-            for pos in range(logits.shape[1]):
-                for token_id in existing_unique:
-                    if logits[b, pos, token_id] > 0:
-                        logits[b, pos, token_id] /= penalty
-                    else:
-                        logits[b, pos, token_id] *= penalty
+            # Gather logits for existing tokens: [seq_len, num_existing]
+            scores = logits[b, :, existing_unique]
+            # Apply penalty vectorized
+            scores = torch.where(
+                scores > 0, scores / penalty, scores * penalty
+            )
+            logits[b, :, existing_unique] = scores
         return logits
     
     def _block_repeated_ngrams(
@@ -708,39 +708,37 @@ class MaskedDiffusionSummarizer(nn.Module):
         ngram_size: int,
     ) -> torch.Tensor:
         """
-        Block n-grams that already appear in the unmasked part of the sequence.
-        For each position, if placing a token would complete an n-gram that
-        already exists, set its logit to -inf.
+        Block n-grams that already appear in the unmasked sequence.
+        Uses a hash-based approach for speed.
         """
-        batch_size, seq_len, vocab_size = logits.shape
+        batch_size, seq_len, _ = logits.shape
+        mask_id = self.mask_token_id
         
         for b in range(batch_size):
-            # Collect existing n-grams from non-masked positions
-            ids = generated_ids[b]
-            existing_ngrams = set()
+            ids = generated_ids[b].tolist()
             
+            # Build set of existing (n-1)-gram prefixes → banned last tokens
+            banned = {}  # prefix_tuple → set of banned token ids
             for i in range(seq_len - ngram_size + 1):
-                ngram = tuple(ids[i:i + ngram_size].tolist())
-                # Only count if all tokens in n-gram are non-mask
-                if self.mask_token_id not in ngram:
-                    existing_ngrams.add(ngram)
+                ngram = ids[i:i + ngram_size]
+                if mask_id in ngram:
+                    continue
+                prefix = tuple(ngram[:-1])
+                if prefix not in banned:
+                    banned[prefix] = set()
+                banned[prefix].add(ngram[-1])
             
-            if not existing_ngrams:
+            if not banned:
                 continue
             
-            # For each position, check if any token would complete a banned n-gram
+            # For each position, check prefix and ban tokens
             for pos in range(ngram_size - 1, seq_len):
-                # Get the (ngram_size-1) tokens before this position
-                prefix = tuple(ids[pos - ngram_size + 1:pos].tolist())
-                # Skip if prefix contains masks (can't form complete n-gram)
-                if self.mask_token_id in prefix:
+                prefix = tuple(ids[pos - ngram_size + 1:pos])
+                if mask_id in prefix:
                     continue
-                
-                # Check which tokens would complete a banned n-gram
-                for ngram in existing_ngrams:
-                    if ngram[:-1] == prefix:
-                        banned_token = ngram[-1]
-                        logits[b, pos, banned_token] = float("-inf")
+                if prefix in banned:
+                    for token_id in banned[prefix]:
+                        logits[b, pos, token_id] = float("-inf")
         
         return logits
     
