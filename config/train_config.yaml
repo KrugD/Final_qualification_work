@@ -28,7 +28,7 @@ training:
   num_epochs: 20
   warmup_steps: 5000
   max_grad_norm: 1.0
-  mixed_precision: "fp16"
+  mixed_precision: "bf16"
   early_stopping_patience: 5
   output_dir: "checkpoints"
 
