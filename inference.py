@@ -565,6 +565,8 @@ def main():
             def flush(self):
                 self.stream.flush()
                 self.file.flush()
+            def isatty(self):
+                return self.stream.isatty() if hasattr(self.stream, 'isatty') else False
             def close(self):
                 self.file.close()
 
