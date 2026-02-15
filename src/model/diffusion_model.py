@@ -523,6 +523,8 @@ class MaskedDiffusionSummarizer(nn.Module):
         strategy: str = "linear",
         sample: bool = False,
         temperature_annealing: bool = False,
+        repetition_penalty: float = 1.0,
+        no_repeat_ngram_size: int = 0,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Generate summaries using iterative denoising.
@@ -541,6 +543,8 @@ class MaskedDiffusionSummarizer(nn.Module):
                 - "confidence": Unmask all at once, then iteratively refine
             sample: If True, sample from distribution; if False, use argmax
             temperature_annealing: If True, decrease temperature over steps
+            repetition_penalty: Penalize already-generated tokens (>1.0 to reduce repeats)
+            no_repeat_ngram_size: Block repeated n-grams of this size (0 to disable)
         """
         batch_size = input_ids.shape[0]
         device = input_ids.device
@@ -593,6 +597,18 @@ class MaskedDiffusionSummarizer(nn.Module):
             
             logits = self._apply_logit_filtering(logits, current_temp, top_k, top_p)
             
+            # Repetition penalty: reduce logits for tokens already placed
+            if repetition_penalty > 1.0:
+                logits = self._apply_repetition_penalty(
+                    logits, generated_ids, repetition_penalty
+                )
+            
+            # No-repeat n-gram blocking
+            if no_repeat_ngram_size > 0:
+                logits = self._block_repeated_ngrams(
+                    logits, generated_ids, no_repeat_ngram_size
+                )
+            
             probs = F.softmax(logits, dim=-1)
             
             if sample:
@@ -639,6 +655,14 @@ class MaskedDiffusionSummarizer(nn.Module):
                 encoder_attention_mask=attention_mask,
             )
             logits = self._apply_logit_filtering(logits, temperature, top_k, top_p)
+            if repetition_penalty > 1.0:
+                logits = self._apply_repetition_penalty(
+                    logits, generated_ids, repetition_penalty
+                )
+            if no_repeat_ngram_size > 0:
+                logits = self._block_repeated_ngrams(
+                    logits, generated_ids, no_repeat_ngram_size
+                )
             if sample:
                 predicted_ids = torch.multinomial(
                     F.softmax(logits, dim=-1).view(-1, logits.size(-1)), num_samples=1
@@ -650,6 +674,75 @@ class MaskedDiffusionSummarizer(nn.Module):
         confidence_scores = F.softmax(logits, dim=-1).max(dim=-1).values
         
         return generated_ids, confidence_scores
+    
+    def _apply_repetition_penalty(
+        self,
+        logits: torch.Tensor,
+        generated_ids: torch.Tensor,
+        penalty: float,
+    ) -> torch.Tensor:
+        """
+        Apply repetition penalty: for tokens already in generated_ids,
+        divide positive logits by penalty and multiply negative logits by penalty.
+        This reduces the probability of repeating tokens.
+        """
+        for b in range(logits.shape[0]):
+            # Get unique tokens already placed (not mask)
+            existing = generated_ids[b][generated_ids[b] != self.mask_token_id]
+            if len(existing) == 0:
+                continue
+            existing_unique = existing.unique()
+            
+            for pos in range(logits.shape[1]):
+                for token_id in existing_unique:
+                    if logits[b, pos, token_id] > 0:
+                        logits[b, pos, token_id] /= penalty
+                    else:
+                        logits[b, pos, token_id] *= penalty
+        return logits
+    
+    def _block_repeated_ngrams(
+        self,
+        logits: torch.Tensor,
+        generated_ids: torch.Tensor,
+        ngram_size: int,
+    ) -> torch.Tensor:
+        """
+        Block n-grams that already appear in the unmasked part of the sequence.
+        For each position, if placing a token would complete an n-gram that
+        already exists, set its logit to -inf.
+        """
+        batch_size, seq_len, vocab_size = logits.shape
+        
+        for b in range(batch_size):
+            # Collect existing n-grams from non-masked positions
+            ids = generated_ids[b]
+            existing_ngrams = set()
+            
+            for i in range(seq_len - ngram_size + 1):
+                ngram = tuple(ids[i:i + ngram_size].tolist())
+                # Only count if all tokens in n-gram are non-mask
+                if self.mask_token_id not in ngram:
+                    existing_ngrams.add(ngram)
+            
+            if not existing_ngrams:
+                continue
+            
+            # For each position, check if any token would complete a banned n-gram
+            for pos in range(ngram_size - 1, seq_len):
+                # Get the (ngram_size-1) tokens before this position
+                prefix = tuple(ids[pos - ngram_size + 1:pos].tolist())
+                # Skip if prefix contains masks (can't form complete n-gram)
+                if self.mask_token_id in prefix:
+                    continue
+                
+                # Check which tokens would complete a banned n-gram
+                for ngram in existing_ngrams:
+                    if ngram[:-1] == prefix:
+                        banned_token = ngram[-1]
+                        logits[b, pos, banned_token] = float("-inf")
+        
+        return logits
     
     def _compute_unmask_schedule(
         self,

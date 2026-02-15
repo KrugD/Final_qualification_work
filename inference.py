@@ -108,6 +108,8 @@ def generate_one(
     strategy: str = "linear",
     sample: bool = False,
     temperature_annealing: bool = False,
+    repetition_penalty: float = 1.0,
+    no_repeat_ngram_size: int = 0,
 ):
     """Generate a summary for the given text."""
     inputs = tokenizer(
@@ -129,6 +131,8 @@ def generate_one(
         strategy=strategy,
         sample=sample,
         temperature_annealing=temperature_annealing,
+        repetition_penalty=repetition_penalty,
+        no_repeat_ngram_size=no_repeat_ngram_size,
     )
     
     # Decode
@@ -191,6 +195,8 @@ def run_single(model, tokenizer, args, texts):
             strategy=args.strategy,
             sample=args.sample,
             temperature_annealing=args.anneal,
+            repetition_penalty=args.rep_penalty,
+            no_repeat_ngram_size=args.no_repeat_ngram,
         )
         
         print(f"\n--- Example {i+1} ---")
@@ -206,60 +212,56 @@ def run_single(model, tokenizer, args, texts):
 def run_sweep(model, tokenizer, args, texts):
     """Run comprehensive parameter sweep with ROUGE evaluation."""
     configs = [
-        # --- Argmax (greedy) with different steps ---
-        {"label": "argmax-10steps-linear",
-         "steps": 10, "temperature": 1.0, "strategy": "linear", "sample": False, "anneal": False,
-         "top_k": None, "top_p": None},
-        {"label": "argmax-50steps-linear",
-         "steps": 50, "temperature": 1.0, "strategy": "linear", "sample": False, "anneal": False,
-         "top_k": None, "top_p": None},
-        {"label": "argmax-100steps-linear",
-         "steps": 100, "temperature": 1.0, "strategy": "linear", "sample": False, "anneal": False,
-         "top_k": None, "top_p": None},
-        {"label": "argmax-50steps-cosine",
+        # --- Baseline (no penalty) ---
+        {"label": "baseline-argmax-50s",
          "steps": 50, "temperature": 1.0, "strategy": "cosine", "sample": False, "anneal": False,
-         "top_k": None, "top_p": None},
-        {"label": "argmax-100steps-cosine",
+         "top_k": None, "top_p": None, "rep_penalty": 1.0, "no_repeat_ngram": 0},
+        
+        # --- Repetition penalty only ---
+        {"label": "rep1.5-argmax-50s",
+         "steps": 50, "temperature": 1.0, "strategy": "cosine", "sample": False, "anneal": False,
+         "top_k": None, "top_p": None, "rep_penalty": 1.5, "no_repeat_ngram": 0},
+        {"label": "rep2.0-argmax-50s",
+         "steps": 50, "temperature": 1.0, "strategy": "cosine", "sample": False, "anneal": False,
+         "top_k": None, "top_p": None, "rep_penalty": 2.0, "no_repeat_ngram": 0},
+        {"label": "rep3.0-argmax-50s",
+         "steps": 50, "temperature": 1.0, "strategy": "cosine", "sample": False, "anneal": False,
+         "top_k": None, "top_p": None, "rep_penalty": 3.0, "no_repeat_ngram": 0},
+        
+        # --- N-gram blocking only ---
+        {"label": "ngram2-argmax-50s",
+         "steps": 50, "temperature": 1.0, "strategy": "cosine", "sample": False, "anneal": False,
+         "top_k": None, "top_p": None, "rep_penalty": 1.0, "no_repeat_ngram": 2},
+        {"label": "ngram3-argmax-50s",
+         "steps": 50, "temperature": 1.0, "strategy": "cosine", "sample": False, "anneal": False,
+         "top_k": None, "top_p": None, "rep_penalty": 1.0, "no_repeat_ngram": 3},
+        
+        # --- Combined: penalty + n-gram ---
+        {"label": "rep2.0-ng3-argmax-50s",
+         "steps": 50, "temperature": 1.0, "strategy": "cosine", "sample": False, "anneal": False,
+         "top_k": None, "top_p": None, "rep_penalty": 2.0, "no_repeat_ngram": 3},
+        {"label": "rep2.0-ng2-argmax-100s",
          "steps": 100, "temperature": 1.0, "strategy": "cosine", "sample": False, "anneal": False,
-         "top_k": None, "top_p": None},
-        {"label": "argmax-50steps-confidence",
-         "steps": 50, "temperature": 1.0, "strategy": "confidence", "sample": False, "anneal": False,
-         "top_k": None, "top_p": None},
+         "top_k": None, "top_p": None, "rep_penalty": 2.0, "no_repeat_ngram": 2},
         
-        # --- Sampling with low temperature ---
-        {"label": "sample-t0.5-50steps-linear",
-         "steps": 50, "temperature": 0.5, "strategy": "linear", "sample": True, "anneal": False,
-         "top_k": None, "top_p": None},
-        {"label": "sample-t0.3-50steps-cosine",
-         "steps": 50, "temperature": 0.3, "strategy": "cosine", "sample": True, "anneal": False,
-         "top_k": None, "top_p": None},
-        {"label": "sample-t0.5-100steps-cosine",
-         "steps": 100, "temperature": 0.5, "strategy": "cosine", "sample": True, "anneal": False,
-         "top_k": None, "top_p": None},
-        
-        # --- Top-k with low temp ---
-        {"label": "topk20-t0.5-50s-cosine",
+        # --- Combined with sampling ---
+        {"label": "rep2.0-ng3-t0.7-50s",
+         "steps": 50, "temperature": 0.7, "strategy": "cosine", "sample": True, "anneal": False,
+         "top_k": None, "top_p": None, "rep_penalty": 2.0, "no_repeat_ngram": 3},
+        {"label": "rep2.0-ng3-t0.5-topk20",
          "steps": 50, "temperature": 0.5, "strategy": "cosine", "sample": True, "anneal": False,
-         "top_k": 20, "top_p": None},
-        {"label": "topk10-t0.3-100s-cosine",
-         "steps": 100, "temperature": 0.3, "strategy": "cosine", "sample": True, "anneal": False,
-         "top_k": 10, "top_p": None},
+         "top_k": 20, "top_p": None, "rep_penalty": 2.0, "no_repeat_ngram": 3},
+        {"label": "rep1.5-ng3-anneal-100s",
+         "steps": 100, "temperature": 0.8, "strategy": "cosine", "sample": True, "anneal": True,
+         "top_k": None, "top_p": None, "rep_penalty": 1.5, "no_repeat_ngram": 3},
         
-        # --- Temperature annealing ---
-        {"label": "anneal-t0.8-50s-cosine",
-         "steps": 50, "temperature": 0.8, "strategy": "cosine", "sample": True, "anneal": True,
-         "top_k": None, "top_p": None},
-        {"label": "anneal-t0.5-100s-cosine",
+        # --- Strong anti-repeat ---
+        {"label": "rep3.0-ng2-argmax-100s",
+         "steps": 100, "temperature": 1.0, "strategy": "cosine", "sample": False, "anneal": False,
+         "top_k": None, "top_p": None, "rep_penalty": 3.0, "no_repeat_ngram": 2},
+        {"label": "rep2.5-ng3-t0.5-100s",
          "steps": 100, "temperature": 0.5, "strategy": "cosine", "sample": True, "anneal": True,
-         "top_k": 20, "top_p": None},
-        
-        # --- Extreme: many steps, low temp ---
-        {"label": "argmax-200steps-cosine",
-         "steps": 200, "temperature": 1.0, "strategy": "cosine", "sample": False, "anneal": False,
-         "top_k": None, "top_p": None},
-        {"label": "topk10-t0.3-200s-cosine",
-         "steps": 200, "temperature": 0.3, "strategy": "cosine", "sample": True, "anneal": True,
-         "top_k": 10, "top_p": None},
+         "top_k": 20, "top_p": None, "rep_penalty": 2.5, "no_repeat_ngram": 3},
     ]
     
     # Use ALL test texts for sweep (not just first one) to get ROUGE
@@ -297,6 +299,8 @@ def run_sweep(model, tokenizer, args, texts):
                 strategy=cfg["strategy"],
                 sample=cfg["sample"],
                 temperature_annealing=cfg["anneal"],
+                repetition_penalty=cfg.get("rep_penalty", 1.0),
+                no_repeat_ngram_size=cfg.get("no_repeat_ngram", 0),
             )
             summaries.append(summary)
             debugs.append(debug)
@@ -407,6 +411,8 @@ def run_eval(model, tokenizer, args):
                 strategy=args.strategy,
                 sample=args.sample,
                 temperature_annealing=args.anneal,
+                repetition_penalty=args.rep_penalty,
+                no_repeat_ngram_size=args.no_repeat_ngram,
             )
         
         prediction = tokenizer.decode(generated_ids[0], skip_special_tokens=True)
@@ -522,6 +528,10 @@ def main():
                         help="Sample from distribution instead of argmax")
     parser.add_argument("--anneal", action="store_true",
                         help="Use temperature annealing")
+    parser.add_argument("--rep_penalty", type=float, default=1.0,
+                        help="Repetition penalty (>1.0 reduces repeats, try 1.5-3.0)")
+    parser.add_argument("--no_repeat_ngram", type=int, default=0,
+                        help="Block repeated n-grams of this size (try 2 or 3)")
     parser.add_argument("--max_target_length", type=int, default=128,
                         help="Maximum target length (default: 128)")
     parser.add_argument("--sweep", action="store_true",
