@@ -7,11 +7,14 @@ Usage:
     # Auto-find best model and run sweep:
     python inference.py --sweep
 
+    # Evaluate on test set with ROUGE/BERTScore:
+    python inference.py --eval --num_samples 50
+
     # Specify weights explicitly:
     python inference.py --weights checkpoints/best_model/weights --sweep
 
     # Single config:
-    python inference.py --steps 50 --temperature 0.7 --strategy linear --sample
+    python inference.py --steps 10 --temperature 0.9 --strategy linear --sample
 
     # Custom text:
     python inference.py --text "Кратко суммаризируй текст: ваш текст здесь"
@@ -27,6 +30,8 @@ import argparse
 import os
 import sys
 import glob
+import time
+import numpy as np
 import torch
 from transformers import AutoTokenizer
 from src.model import MaskedDiffusionSummarizer
@@ -331,6 +336,153 @@ def run_sweep(model, tokenizer, args, texts):
         print("  3. Check that mask_token_id matches the training config")
 
 
+def run_eval(model, tokenizer, args):
+    """Evaluate on the test dataset with ROUGE, BERTScore, and compression ratio."""
+    from datasets import load_dataset
+    from src.utils.metrics import compute_rouge, compute_compression_ratio
+    
+    print("=" * 90)
+    print("EVALUATION ON TEST SET")
+    print(f"Steps={args.steps}, temp={args.temperature}, top_k={args.top_k}, "
+          f"sample={args.sample}, strategy={args.strategy}")
+    print("=" * 90)
+    
+    # Load test data
+    print("\nLoading test dataset...")
+    dataset = load_dataset(
+        args.eval_dataset, split="test",
+    )
+    print(f"Test set size: {len(dataset)}")
+    
+    num_samples = min(args.num_samples, len(dataset))
+    print(f"Evaluating on {num_samples} samples...")
+    
+    predictions = []
+    references = []
+    sources = []
+    
+    t_start = time.time()
+    
+    for i in range(num_samples):
+        example = dataset[i]
+        source = example.get("text", example.get("article", ""))
+        reference = example.get("summary", example.get("highlights", ""))
+        
+        # Add instruction prefix (same as training)
+        prefixed_source = f"Кратко суммаризируй текст: {source}"
+        
+        # Tokenize
+        inputs = tokenizer(
+            prefixed_source,
+            max_length=512,
+            padding="max_length",
+            truncation=True,
+            return_tensors="pt",
+        ).to(args.device)
+        
+        # Generate
+        with torch.no_grad():
+            generated_ids, confidence = model.generate(
+                input_ids=inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                max_length=args.max_target_length,
+                num_inference_steps=args.steps,
+                temperature=args.temperature,
+                top_k=args.top_k,
+                top_p=args.top_p,
+                strategy=args.strategy,
+                sample=args.sample,
+                temperature_annealing=args.anneal,
+            )
+        
+        prediction = tokenizer.decode(generated_ids[0], skip_special_tokens=True)
+        predictions.append(prediction)
+        references.append(reference)
+        sources.append(prefixed_source)
+        
+        # Show progress + first 5 samples
+        if i < 5:
+            print(f"\n--- Sample {i+1}/{num_samples} ---")
+            print(f"  Source:     {prefixed_source[:150]}...")
+            print(f"  Reference:  {reference[:150]}...")
+            print(f"  Prediction: {prediction[:200]}")
+        elif (i + 1) % 10 == 0:
+            elapsed = time.time() - t_start
+            speed = (i + 1) / elapsed
+            eta = (num_samples - i - 1) / speed
+            print(f"  [{i+1}/{num_samples}] {speed:.1f} samples/s, ETA: {eta:.0f}s")
+    
+    elapsed = time.time() - t_start
+    print(f"\nGeneration done: {num_samples} samples in {elapsed:.1f}s "
+          f"({num_samples/elapsed:.1f} samples/s)")
+    
+    # --- Compute ROUGE ---
+    print("\n" + "=" * 90)
+    print("METRICS")
+    print("=" * 90)
+    
+    rouge_scores = compute_rouge(predictions, references)
+    print(f"\n  ROUGE-1: {rouge_scores['rouge1']:.4f}")
+    print(f"  ROUGE-2: {rouge_scores['rouge2']:.4f}")
+    print(f"  ROUGE-L: {rouge_scores['rougeL']:.4f}")
+    
+    # Per-sample ROUGE for first 10
+    try:
+        from rouge_score import rouge_scorer
+        scorer = rouge_scorer.RougeScorer(["rouge1", "rougeL"], use_stemmer=False)
+        
+        print("\n  Per-sample ROUGE (first 10):")
+        per_sample_r1 = []
+        for i in range(min(10, num_samples)):
+            pred = predictions[i] if predictions[i].strip() else "empty"
+            ref = references[i] if references[i].strip() else "empty"
+            result = scorer.score(ref, pred)
+            r1 = result["rouge1"].fmeasure
+            rL = result["rougeL"].fmeasure
+            per_sample_r1.append(r1)
+            print(f"    [{i+1}] R1={r1:.4f}, RL={rL:.4f} | "
+                  f"pred='{predictions[i][:80]}...' | "
+                  f"ref='{references[i][:80]}...'")
+        
+        nonzero = sum(1 for s in per_sample_r1 if s > 0)
+        print(f"\n  Non-zero ROUGE-1: {nonzero}/{len(per_sample_r1)} samples")
+    except ImportError:
+        pass
+    
+    # --- Compression ratio ---
+    comp_scores = compute_compression_ratio(predictions, sources)
+    print(f"\n  Compression ratio: {comp_scores['compression_ratio_mean']:.4f} "
+          f"(std={comp_scores['compression_ratio_std']:.4f})")
+    
+    # --- BERTScore ---
+    try:
+        from src.utils.metrics import compute_bertscore
+        print("\n  Computing BERTScore (may take a moment)...")
+        bert_scores = compute_bertscore(
+            predictions, references,
+            model_type="bert-base-multilingual-cased",
+            device=args.device,
+        )
+        print(f"  BERTScore F1:        {bert_scores['bertscore_f1']:.4f}")
+        print(f"  BERTScore Precision: {bert_scores['bertscore_precision']:.4f}")
+        print(f"  BERTScore Recall:    {bert_scores['bertscore_recall']:.4f}")
+    except Exception as e:
+        print(f"  BERTScore skipped: {e}")
+    
+    # --- Output stats ---
+    pred_lens = [len(p.split()) for p in predictions]
+    ref_lens = [len(r.split()) for r in references]
+    empty_count = sum(1 for p in predictions if not p.strip())
+    
+    print(f"\n  Avg prediction length: {np.mean(pred_lens):.1f} words")
+    print(f"  Avg reference length:  {np.mean(ref_lens):.1f} words")
+    print(f"  Empty predictions:     {empty_count}/{num_samples}")
+    
+    print("\n" + "=" * 90)
+    print("DONE")
+    print("=" * 90)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Inference with Masked Diffusion Summarizer",
@@ -360,6 +512,13 @@ def main():
                         help="Maximum target length (default: 128)")
     parser.add_argument("--sweep", action="store_true",
                         help="Run comprehensive parameter sweep")
+    parser.add_argument("--eval", action="store_true",
+                        help="Evaluate on test dataset with ROUGE/BERTScore")
+    parser.add_argument("--num_samples", type=int, default=50,
+                        help="Number of test samples for --eval (default: 50)")
+    parser.add_argument("--eval_dataset", type=str,
+                        default="RussianNLP/Mixed-Summarization-Dataset",
+                        help="Dataset for --eval")
     parser.add_argument("--text", type=str, default=None,
                         help="Custom text to summarize (overrides test texts)")
     args = parser.parse_args()
@@ -384,7 +543,9 @@ def main():
     
     print()
     
-    if args.sweep:
+    if args.eval:
+        run_eval(model, tokenizer, args)
+    elif args.sweep:
         run_sweep(model, tokenizer, args, texts)
     else:
         run_single(model, tokenizer, args, texts)

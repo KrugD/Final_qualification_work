@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 def compute_rouge(
     predictions: List[str],
     references: List[str],
-    use_stemmer: bool = True,
+    use_stemmer: bool = False,
 ) -> Dict[str, float]:
     """
     Compute ROUGE scores for summarization.
@@ -16,7 +16,8 @@ def compute_rouge(
     Args:
         predictions: List of predicted summaries
         references: List of reference summaries
-        use_stemmer: Whether to use stemming
+        use_stemmer: Whether to use stemming (False for Russian —
+                     rouge_score uses English-only Porter stemmer)
     
     Returns:
         Dictionary with ROUGE-1, ROUGE-2, ROUGE-L scores (F1)
@@ -34,7 +35,7 @@ def compute_rouge(
     
     scores = {"rouge1": [], "rouge2": [], "rougeL": []}
     
-    for pred, ref in zip(predictions, references):
+    for i, (pred, ref) in enumerate(zip(predictions, references)):
         # Handle empty strings
         if not pred.strip():
             pred = "empty"
@@ -45,13 +46,34 @@ def compute_rouge(
         
         for key in scores:
             scores[key].append(result[key].fmeasure)
+        
+        # Debug: log first 3 samples to understand ROUGE behavior
+        if i < 3:
+            logger.info(
+                f"ROUGE debug sample {i}: "
+                f"rouge1={result['rouge1'].fmeasure:.4f}, "
+                f"rouge2={result['rouge2'].fmeasure:.4f}, "
+                f"rougeL={result['rougeL'].fmeasure:.4f}, "
+                f"pred_words={len(pred.split())}, ref_words={len(ref.split())}, "
+                f"pred='{pred[:100]}', ref='{ref[:100]}'"
+            )
     
-    # Average scores
-    return {
-        "rouge1": np.mean(scores["rouge1"]),
-        "rouge2": np.mean(scores["rouge2"]),
-        "rougeL": np.mean(scores["rougeL"]),
+    avg_scores = {
+        "rouge1": float(np.mean(scores["rouge1"])),
+        "rouge2": float(np.mean(scores["rouge2"])),
+        "rougeL": float(np.mean(scores["rougeL"])),
     }
+    
+    # Log summary
+    nonzero_r1 = sum(1 for s in scores["rouge1"] if s > 0)
+    logger.info(
+        f"ROUGE summary: {len(predictions)} samples, "
+        f"{nonzero_r1} with rouge1>0, "
+        f"avg rouge1={avg_scores['rouge1']:.6f}, "
+        f"avg rougeL={avg_scores['rougeL']:.6f}"
+    )
+    
+    return avg_scores
 
 
 def compute_bertscore(
