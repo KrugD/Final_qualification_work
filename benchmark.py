@@ -92,8 +92,10 @@ def load_diffusion_model(weights_path: str, device: str):
     model = MaskedDiffusionSummarizer.from_pretrained(weights_path, device=device)
     model.eval()
     params = sum(p.numel() for p in model.parameters())
-    print(f"  Parameters: {params:,}")
-    tokenizer = AutoTokenizer.from_pretrained("ai-forever/ruT5-base")
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"  Parameters: {params:,} total, {trainable:,} trainable")
+    # Use the model's own tokenizer (matches encoder: FRED-T5 or ruT5)
+    tokenizer = model.tokenizer
     return model, tokenizer, params
 
 

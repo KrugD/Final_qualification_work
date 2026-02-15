@@ -586,7 +586,7 @@ def main():
     # Find and load model
     weights_path = find_weights(args.weights)
     model = load_model(weights_path, args.device)
-    tokenizer = AutoTokenizer.from_pretrained("ai-forever/ruT5-base")
+    tokenizer = model.tokenizer  # Use model's own tokenizer (FRED-T5 or ruT5)
     
     texts = [args.text] if args.text else TEST_TEXTS
     

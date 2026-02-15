@@ -45,8 +45,14 @@ def create_optimizer_and_scheduler(
     num_training_steps: int,
 ) -> tuple:
     """Create optimizer and learning rate scheduler."""
+    # Only optimize trainable parameters (encoder may be frozen)
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    num_trainable = sum(p.numel() for p in trainable_params)
+    num_total = sum(p.numel() for p in model.parameters())
+    logger.info(f"Parameters: {num_total:,} total, {num_trainable:,} trainable")
+
     optimizer = AdamW(
-        model.parameters(),
+        trainable_params,
         lr=config["training"]["learning_rate"],
         weight_decay=config["training"].get("weight_decay", 0.01),
         betas=(0.9, 0.999),
@@ -237,6 +243,7 @@ def train(config: Dict[str, Any], resume_from: Optional[str] = None):
         mamba_state_size=config["model"].get("mamba_state_size", 16),
         mamba_conv_kernel=config["model"].get("mamba_conv_kernel", 4),
         mamba_expand_factor=config["model"].get("mamba_expand_factor", 2),
+        freeze_encoder=config["model"].get("freeze_encoder", False),
     )
     
     # Calculate training steps
