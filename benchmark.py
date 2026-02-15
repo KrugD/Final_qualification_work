@@ -1,25 +1,18 @@
 """
-Benchmark: Autoregressive ruT5 vs Diffusion Model.
+Benchmark: Autoregressive models vs Diffusion Model.
 
 Compares generation quality (ROUGE, BERTScore) and speed (tokens/sec, time/sample).
 
 Usage:
-    # After fine-tuning baseline:
     python benchmark.py \
-        --ar_model checkpoints/baseline_rut5/best_model \
         --diffusion_weights checkpoints/best_model/weights \
-        --output benchmark_results.txt
+        --multi_step --output benchmark_results.txt
 
-    # With HuggingFace model:
+    # Custom AR models:
     python benchmark.py \
-        --ar_model ai-forever/ruT5-base \
         --diffusion_weights checkpoints/best_model/weights \
-        --num_samples 50 --output results.txt
-
-    # Multi-step comparison:
-    python benchmark.py \
-        --ar_model checkpoints/baseline_rut5/best_model \
-        --diffusion_weights checkpoints/best_model/weights \
+        --ar_model RussianNLP/FRED-T5-Summarizer \
+        --ar_model2 IlyaGusev/rut5_base_sum_gazeta \
         --multi_step --output results.txt
 """
 
@@ -27,7 +20,6 @@ import argparse
 import gc
 import time
 import sys
-import os
 import numpy as np
 import torch
 from transformers import AutoTokenizer, T5ForConditionalGeneration
@@ -90,9 +82,8 @@ def load_ar_model(model_name_or_path: str, device: str):
     model = T5ForConditionalGeneration.from_pretrained(model_name_or_path).to(device)
     model.eval()
     params = sum(p.numel() for p in model.parameters())
-    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"  Parameters: {params:,} total, {trainable:,} trainable")
-    return model, tokenizer
+    print(f"  Parameters: {params:,}")
+    return model, tokenizer, params
 
 
 def load_diffusion_model(weights_path: str, device: str):
@@ -101,10 +92,9 @@ def load_diffusion_model(weights_path: str, device: str):
     model = MaskedDiffusionSummarizer.from_pretrained(weights_path, device=device)
     model.eval()
     params = sum(p.numel() for p in model.parameters())
-    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"  Parameters: {params:,} total, {trainable:,} trainable")
+    print(f"  Parameters: {params:,}")
     tokenizer = AutoTokenizer.from_pretrained("ai-forever/ruT5-base")
-    return model, tokenizer
+    return model, tokenizer, params
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -113,7 +103,7 @@ def load_diffusion_model(weights_path: str, device: str):
 
 def generate_ar(model, tokenizer, texts, device, max_source=512, max_target=128,
                 num_beams=1, do_sample=False):
-    """Generate summaries with autoregressive T5 (one sample at a time for fair timing)."""
+    """Generate summaries with autoregressive T5."""
     predictions = []
     times = []
 
@@ -149,7 +139,7 @@ def generate_ar(model, tokenizer, texts, device, max_source=512, max_target=128,
 def generate_diff(model, tokenizer, texts, device, max_source=512, max_target=128,
                   num_steps=50, temperature=1.0, strategy="cosine", sample=False,
                   rep_penalty=2.0, no_repeat_ngram=2):
-    """Generate summaries with diffusion model (one sample at a time for fair timing)."""
+    """Generate summaries with diffusion model."""
     predictions = []
     times = []
 
@@ -193,13 +183,11 @@ def compute_all_metrics(predictions, references, sources, device):
     """Compute ROUGE, BERTScore, compression ratio."""
     rouge = compute_rouge(predictions, references)
     comp = compute_compression_ratio(predictions, sources)
-
     bert = compute_bertscore(
         predictions, references,
         model_type="bert-base-multilingual-cased",
         device=device,
     )
-
     return {**rouge, **comp, **bert}
 
 
@@ -208,7 +196,6 @@ def compute_all_metrics(predictions, references, sources, device):
 # ──────────────────────────────────────────────────────────────────────────────
 
 def warmup_ar(model, tokenizer, device, max_source=512, max_target=128, n=3):
-    """GPU warm-up for AR model."""
     dummy = "Привет мир " * 50
     for _ in range(n):
         inputs = tokenizer(dummy, max_length=max_source, truncation=True,
@@ -221,7 +208,6 @@ def warmup_ar(model, tokenizer, device, max_source=512, max_target=128, n=3):
 
 
 def warmup_diff(model, tokenizer, device, max_source=512, max_target=128, n=3, steps=10):
-    """GPU warm-up for diffusion model."""
     dummy = "Привет мир " * 50
     for _ in range(n):
         inputs = tokenizer(dummy, max_length=max_source, truncation=True,
@@ -235,6 +221,53 @@ def warmup_diff(model, tokenizer, device, max_source=512, max_target=128, n=3, s
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Benchmark one AR model
+# ──────────────────────────────────────────────────────────────────────────────
+
+def benchmark_ar(label, model_name, sources, references, device, max_source, max_target):
+    """Benchmark a single autoregressive model. Returns results dict."""
+    print_header(f"AUTOREGRESSIVE: {label}")
+
+    ar_model, ar_tok, params = load_ar_model(model_name, device)
+
+    print("Warming up (3 forward passes)...")
+    warmup_ar(ar_model, ar_tok, device, max_source, max_target)
+
+    print(f"Generating {len(sources)} summaries (greedy, max_target={max_target})...")
+    preds, times = generate_ar(ar_model, ar_tok, sources, device, max_source, max_target)
+
+    total = sum(times)
+    per = np.mean(times)
+    std = np.std(times)
+    words = sum(len(p.split()) for p in preds)
+    wps = words / total if total > 0 else 0
+
+    print(f"  Total time: {total:.2f}s")
+    print(f"  Time/sample: {per:.4f}s (std={std:.4f})")
+    print(f"  Words generated: {words}")
+    print(f"  Words/sec: {wps:.1f}")
+
+    print("Computing metrics...")
+    metrics = compute_all_metrics(preds, references, sources, device)
+
+    del ar_model
+    free_gpu()
+
+    return {
+        "model_name": model_name,
+        "params": params,
+        "predictions": preds,
+        "times": times,
+        "total_time": total,
+        "per_sample": per,
+        "per_sample_std": std,
+        "tokens": words,
+        "tps": wps,
+        "metrics": metrics,
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Main benchmark
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -244,56 +277,23 @@ def run_benchmark(args, sources, references):
     results = {}
 
     # ==================================================================
-    # 1. Autoregressive baseline
+    # 1. AR baselines
     # ==================================================================
-    print_header("AUTOREGRESSIVE MODEL (ruT5)")
+    ar_models = [(args.ar_model, "ar1")]
+    if args.ar_model2:
+        ar_models.append((args.ar_model2, "ar2"))
 
-    ar_model, ar_tok = load_ar_model(args.ar_model, device)
-
-    # Warm-up
-    print("Warming up (3 forward passes)...")
-    warmup_ar(ar_model, ar_tok, device,
-              args.max_source, args.max_target)
-
-    print(f"Generating {len(sources)} summaries (greedy, max_target={args.max_target})...")
-    ar_preds, ar_times = generate_ar(
-        ar_model, ar_tok, sources, device,
-        args.max_source, args.max_target,
-    )
-
-    ar_total = sum(ar_times)
-    ar_per_sample = np.mean(ar_times)
-    ar_std = np.std(ar_times)
-    ar_tokens = sum(len(p.split()) for p in ar_preds)
-    ar_tps = ar_tokens / ar_total if ar_total > 0 else 0
-
-    print(f"  Total time: {ar_total:.2f}s")
-    print(f"  Time/sample: {ar_per_sample:.4f}s (std={ar_std:.4f})")
-    print(f"  Words generated: {ar_tokens}")
-    print(f"  Words/sec: {ar_tps:.1f}")
-
-    print("Computing metrics...")
-    ar_metrics = compute_all_metrics(ar_preds, references, sources, device)
-
-    results["ar"] = {
-        "predictions": ar_preds,
-        "times": ar_times,
-        "total_time": ar_total,
-        "per_sample": ar_per_sample,
-        "per_sample_std": ar_std,
-        "tokens": ar_tokens,
-        "tps": ar_tps,
-        "metrics": ar_metrics,
-    }
-
-    # Free memory
-    del ar_model
-    free_gpu()
+    for model_name, key in ar_models:
+        short = model_name.split("/")[-1] if "/" in model_name else model_name
+        results[key] = benchmark_ar(
+            short, model_name, sources, references,
+            device, args.max_source, args.max_target,
+        )
 
     # ==================================================================
-    # 2. Diffusion model (possibly multiple step configs)
+    # 2. Diffusion model
     # ==================================================================
-    diff_model, diff_tok = load_diffusion_model(args.diffusion_weights, device)
+    diff_model, diff_tok, diff_params = load_diffusion_model(args.diffusion_weights, device)
 
     step_configs = [args.diffusion_steps]
     if args.multi_step:
@@ -303,7 +303,6 @@ def run_benchmark(args, sources, references):
         label = f"diff_{steps}"
         print_header(f"DIFFUSION MODEL  (steps={steps})")
 
-        # Warm-up
         print("Warming up (3 forward passes)...")
         warmup_diff(diff_model, diff_tok, device,
                     args.max_source, args.max_target, steps=min(steps, 10))
@@ -335,6 +334,8 @@ def run_benchmark(args, sources, references):
         d_metrics = compute_all_metrics(diff_preds, references, sources, device)
 
         results[label] = {
+            "model_name": "Diffusion (ours)",
+            "params": diff_params,
             "steps": steps,
             "predictions": diff_preds,
             "times": diff_times,
@@ -355,13 +356,50 @@ def run_benchmark(args, sources, references):
 def print_results(results, sources, references):
     """Pretty-print comparison tables."""
 
-    # ── Quality table ─────────────────────────────────────────────────
-    print_header("QUALITY COMPARISON")
-
-    labels_order = ["ar"] + sorted(
+    # Build column order: ar1, ar2 (if exists), then diff_*
+    labels_order = []
+    if "ar1" in results:
+        labels_order.append("ar1")
+    if "ar2" in results:
+        labels_order.append("ar2")
+    labels_order += sorted(
         [k for k in results if k.startswith("diff_")],
         key=lambda k: results[k].get("steps", 0),
     )
+
+    # Column display names
+    def col_name(lbl):
+        r = results[lbl]
+        if lbl.startswith("ar"):
+            short = r["model_name"].split("/")[-1]
+            # Truncate long names
+            if len(short) > 16:
+                short = short[:14] + ".."
+            return short
+        else:
+            return f"Diff s={r['steps']}"
+
+    col_names = [col_name(lbl) for lbl in labels_order]
+
+    # ── Model info ────────────────────────────────────────────────────
+    print_header("MODEL INFO")
+    header = f"{'':>22s}"
+    for cn in col_names:
+        header += f"  {cn:>16s}"
+    print(header)
+    print("-" * len(header))
+
+    row = f"{'Parameters':<22s}"
+    for lbl in labels_order:
+        p = results[lbl]["params"]
+        if p >= 1e9:
+            row += f"  {p/1e9:>14.2f}B "
+        else:
+            row += f"  {p/1e6:>14.0f}M "
+    print(row)
+
+    # ── Quality table ─────────────────────────────────────────────────
+    print_header("QUALITY COMPARISON")
 
     quality_keys = [
         ("rouge1", "ROUGE-1"),
@@ -373,17 +411,9 @@ def print_results(results, sources, references):
         ("compression_ratio_mean", "Compression"),
     ]
 
-    # Column names
-    col_names = []
-    for lbl in labels_order:
-        if lbl == "ar":
-            col_names.append("AR (ruT5)")
-        else:
-            col_names.append(f"Diff s={results[lbl]['steps']}")
-
     header = f"{'Metric':<22s}"
     for cn in col_names:
-        header += f"  {cn:>14s}"
+        header += f"  {cn:>16s}"
     print(header)
     print("-" * len(header))
 
@@ -391,7 +421,7 @@ def print_results(results, sources, references):
         row = f"{display:<22s}"
         for lbl in labels_order:
             val = results[lbl]["metrics"].get(key, 0)
-            row += f"  {val:14.4f}"
+            row += f"  {val:16.4f}"
         print(row)
 
     # ── Speed table ───────────────────────────────────────────────────
@@ -399,7 +429,7 @@ def print_results(results, sources, references):
 
     header = f"{'Metric':<22s}"
     for cn in col_names:
-        header += f"  {cn:>14s}"
+        header += f"  {cn:>16s}"
     print(header)
     print("-" * len(header))
 
@@ -415,47 +445,43 @@ def print_results(results, sources, references):
         row = f"{display:<22s}"
         for lbl in labels_order:
             val = results[lbl][key]
-            row += f"  {val:>14{fmt}}"
+            row += f"  {val:>16{fmt}}"
         print(row)
 
-    # Speedup row
-    ar_per = results["ar"]["per_sample"]
-    row = f"{'Speedup vs AR':<22s}  {'1.00x':>14s}"
-    for lbl in labels_order[1:]:
-        d_per = results[lbl]["per_sample"]
-        speedup = ar_per / d_per if d_per > 0 else 0
-        row += f"  {speedup:>13.2f}x"
-    print(row)
+    # Speedup rows (vs each AR model)
+    for ar_key in [k for k in labels_order if k.startswith("ar")]:
+        ar_per = results[ar_key]["per_sample"]
+        ar_name = col_name(ar_key)
+        row = f"{'Speedup vs ' + ar_name:<22s}"
+        for lbl in labels_order:
+            d_per = results[lbl]["per_sample"]
+            speedup = ar_per / d_per if d_per > 0 else 0
+            row += f"  {speedup:>15.2f}x"
+        print(row)
 
     # ── Output statistics ─────────────────────────────────────────────
     print_header("OUTPUT STATISTICS")
 
     header = f"{'Metric':<22s}"
     for cn in col_names:
-        header += f"  {cn:>14s}"
+        header += f"  {cn:>16s}"
     print(header)
     print("-" * len(header))
 
-    for lbl in labels_order:
-        pass  # will print below
-
-    # Avg words
     row = f"{'Avg output words':<22s}"
     for lbl in labels_order:
         lens = [len(p.split()) for p in results[lbl]["predictions"]]
-        row += f"  {np.mean(lens):>14.1f}"
+        row += f"  {np.mean(lens):>16.1f}"
     print(row)
 
-    # Empty outputs
     row = f"{'Empty outputs':<22s}"
     for lbl in labels_order:
         emp = sum(1 for p in results[lbl]["predictions"] if not p.strip())
-        row += f"  {emp:>14d}"
+        row += f"  {emp:>16d}"
     print(row)
 
-    # Avg reference words
     ref_lens = [len(r.split()) for r in references]
-    print(f"{'Avg reference words':<22s}  {np.mean(ref_lens):>14.1f}")
+    print(f"{'Avg reference words':<22s}  {np.mean(ref_lens):>16.1f}")
 
     # ── Sample outputs ─────────────────────────────────────────────────
     print_header("SAMPLE OUTPUTS (first 5)")
@@ -466,14 +492,16 @@ def print_results(results, sources, references):
         print(f"  Source:     {sources[i][:150]}...")
         print(f"  Reference:  {references[i][:200]}")
         for lbl in labels_order:
-            name = "AR" if lbl == "ar" else f"Diff(s={results[lbl]['steps']})"
-            print(f"  {name:<12s}: {results[lbl]['predictions'][i][:200]}")
+            name = col_name(lbl)
+            print(f"  {name:<16s}: {results[lbl]['predictions'][i][:200]}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Benchmark: AR T5 vs Diffusion")
     parser.add_argument("--ar_model", type=str, default="RussianNLP/FRED-T5-Summarizer",
-                        help="Autoregressive model (HF name or local path)")
+                        help="First AR baseline (SOTA)")
+    parser.add_argument("--ar_model2", type=str, default="IlyaGusev/rut5_base_sum_gazeta",
+                        help="Second AR baseline (fair size comparison)")
     parser.add_argument("--diffusion_weights", type=str, required=True,
                         help="Path to diffusion model weights")
     parser.add_argument("--device", type=str, default=None)
@@ -493,8 +521,7 @@ def main():
                         default="RussianNLP/Mixed-Summarization-Dataset")
 
     # Output
-    parser.add_argument("--output", type=str, default=None,
-                        help="Save output to file")
+    parser.add_argument("--output", type=str, default=None)
 
     args = parser.parse_args()
 
