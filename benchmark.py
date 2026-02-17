@@ -299,7 +299,7 @@ def run_benchmark(args, sources, references):
 
     step_configs = [args.diffusion_steps]
     if args.multi_step:
-        step_configs = [5, 10, 25, 50]
+        step_configs = [10, 25, 50, 100]
 
     for steps in step_configs:
         label = f"diff_{steps}"
@@ -512,9 +512,9 @@ def main():
     parser.add_argument("--max_target", type=int, default=128)
 
     # Diffusion settings
-    parser.add_argument("--diffusion_steps", type=int, default=50)
+    parser.add_argument("--diffusion_steps", type=int, default=100)
     parser.add_argument("--multi_step", action="store_true",
-                        help="Test diffusion with steps=[5,10,25,50]")
+                        help="Test diffusion with steps=[10,25,50,100]")
     parser.add_argument("--rep_penalty", type=float, default=2.0)
     parser.add_argument("--no_repeat_ngram", type=int, default=2)
 
