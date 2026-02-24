@@ -142,6 +142,10 @@ class MaskedDiffusionSummarizer(nn.Module):
         mamba_conv_kernel: int = 4,
         mamba_expand_factor: int = 2,
         freeze_encoder: bool = True,
+        use_self_conditioning: bool = False,
+        self_cond_prob: float = 0.5,
+        unfreeze_encoder_layers: int = 0,
+        gradient_checkpointing: bool = False,
     ):
         super().__init__()
 
@@ -152,6 +156,10 @@ class MaskedDiffusionSummarizer(nn.Module):
         self.similarity_loss_weight = similarity_loss_weight
         self.decoder_type = decoder_type
         self.freeze_encoder = freeze_encoder
+        self.use_self_conditioning = use_self_conditioning
+        self.self_cond_prob = self_cond_prob
+        self.unfreeze_encoder_layers = unfreeze_encoder_layers
+        self.gradient_checkpointing = gradient_checkpointing
 
         # Load pretrained encoder
         base_encoder = T5EncoderModel.from_pretrained(encoder_name)
@@ -160,12 +168,17 @@ class MaskedDiffusionSummarizer(nn.Module):
         # Wrap with semantic encoder
         self.encoder = SemanticEncoder(base_encoder, encoder_config.d_model)
 
-        # Freeze encoder if requested (saves ~756M params from optimizer)
+        # Freeze/unfreeze encoder layers
         if freeze_encoder:
             for param in self.encoder.encoder.parameters():
                 param.requires_grad = False
             # cls_projection stays trainable (small, ~2.4M)
-            print(f"Encoder frozen ({sum(p.numel() for p in self.encoder.encoder.parameters()):,} params)")
+            frozen_count = sum(p.numel() for p in self.encoder.encoder.parameters())
+            print(f"Encoder frozen ({frozen_count:,} params)")
+
+            # Partially unfreeze top N layers if requested
+            if unfreeze_encoder_layers > 0:
+                self._unfreeze_top_encoder_layers(unfreeze_encoder_layers)
 
         # Get tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(encoder_name)
@@ -194,11 +207,15 @@ class MaskedDiffusionSummarizer(nn.Module):
                 conv_kernel=mamba_conv_kernel,
                 expand_factor=mamba_expand_factor,
                 dropout=dropout,
+                use_gradient_checkpointing=gradient_checkpointing,
             )
         else:
             raise ValueError(
                 f"Unknown decoder_type: {decoder_type}. Only 'mamba' is supported."
             )
+
+        if use_self_conditioning:
+            print(f"Self-conditioning enabled (prob={self_cond_prob})")
 
         # Initialize noise scheduler
         if use_semantic_noise:
@@ -217,6 +234,26 @@ class MaskedDiffusionSummarizer(nn.Module):
     def get_trainable_parameters(self):
         """Return only trainable parameters (for optimizer)."""
         return [p for p in self.parameters() if p.requires_grad]
+
+    def _unfreeze_top_encoder_layers(self, n: int):
+        """Unfreeze the last N layers of the T5 encoder."""
+        blocks = list(self.encoder.encoder.encoder.block)
+        unfrozen_count = 0
+        for block in blocks[-n:]:
+            for param in block.parameters():
+                param.requires_grad = True
+                unfrozen_count += param.numel()
+        # Also unfreeze the final layer norm
+        if hasattr(self.encoder.encoder.encoder, "final_layer_norm"):
+            for param in self.encoder.encoder.encoder.final_layer_norm.parameters():
+                param.requires_grad = True
+                unfrozen_count += param.numel()
+        print(f"Unfroze top {n} encoder layers ({unfrozen_count:,} params)")
+
+    def unfreeze_encoder_top_layers(self, n: int):
+        """Public method to unfreeze encoder layers during curriculum training."""
+        self._unfreeze_top_encoder_layers(n)
+        self.unfreeze_encoder_layers = n
 
     def compute_similarity_loss(
         self,
@@ -317,16 +354,35 @@ class MaskedDiffusionSummarizer(nn.Module):
             noisy_labels = torch.cat(noisy_labels_list, dim=0)
             noise_masks = torch.cat(noise_masks_list, dim=0)
 
-        # 4. Decode noisy target conditioned on source encoder output
+        # 4. Self-conditioning: with probability self_cond_prob, do a preliminary
+        # forward pass and feed its soft embeddings back into the second pass.
+        self_cond_emb = None
+        if self.use_self_conditioning and self.training:
+            if torch.rand(1).item() < self.self_cond_prob:
+                with torch.no_grad():
+                    first_logits = self.decoder(
+                        input_ids=noisy_labels,
+                        encoder_hidden_states=encoder_hidden_states,
+                        timesteps=timesteps,
+                        attention_mask=labels_attention_mask,
+                        encoder_attention_mask=attention_mask,
+                    )
+                    soft_probs = F.softmax(first_logits, dim=-1)
+                    self_cond_emb = (
+                        soft_probs @ self.decoder.token_embedding.weight
+                    ).detach()
+
+        # 5. Decode noisy target conditioned on source encoder output
         logits = self.decoder(
             input_ids=noisy_labels,
             encoder_hidden_states=encoder_hidden_states,
             timesteps=timesteps,
             attention_mask=labels_attention_mask,
             encoder_attention_mask=attention_mask,
+            self_cond_emb=self_cond_emb,
         )
 
-        # 5. Compute losses (paper Eq. 5: L = Lvb + Lcls + CE_reconstruction)
+        # 6. Compute losses (paper Eq. 5: L = Lvb + Lcls + CE_reconstruction)
         ce_loss = F.cross_entropy(
             logits.view(-1, logits.size(-1)),
             labels.view(-1),
@@ -457,7 +513,8 @@ class MaskedDiffusionSummarizer(nn.Module):
             max_length, num_inference_steps, strategy
         )
 
-        # Iterative denoising
+        # Iterative denoising with self-conditioning
+        prev_logits = None
         for step in range(num_inference_steps):
             t = int(
                 round(
@@ -472,13 +529,21 @@ class MaskedDiffusionSummarizer(nn.Module):
                 (batch_size,), t, dtype=torch.long, device=device
             )
 
+            # Build self-conditioning from previous step's predictions
+            self_cond_emb = None
+            if self.use_self_conditioning and prev_logits is not None:
+                soft_probs = F.softmax(prev_logits, dim=-1)
+                self_cond_emb = soft_probs @ self.decoder.token_embedding.weight
+
             logits = self.decoder(
                 input_ids=generated_ids,
                 encoder_hidden_states=encoder_hidden_states,
                 timesteps=timesteps,
                 attention_mask=target_attention_mask,
                 encoder_attention_mask=attention_mask,
+                self_cond_emb=self_cond_emb,
             )
+            prev_logits = logits
 
             # Temperature (optionally with annealing)
             current_temp = temperature
@@ -540,12 +605,19 @@ class MaskedDiffusionSummarizer(nn.Module):
         is_masked = generated_ids == self.mask_token_id
         if is_masked.any():
             timesteps = torch.zeros(batch_size, dtype=torch.long, device=device)
+
+            self_cond_emb = None
+            if self.use_self_conditioning and prev_logits is not None:
+                soft_probs = F.softmax(prev_logits, dim=-1)
+                self_cond_emb = soft_probs @ self.decoder.token_embedding.weight
+
             logits = self.decoder(
                 input_ids=generated_ids,
                 encoder_hidden_states=encoder_hidden_states,
                 timesteps=timesteps,
                 attention_mask=target_attention_mask,
                 encoder_attention_mask=attention_mask,
+                self_cond_emb=self_cond_emb,
             )
             logits = self._apply_logit_filtering(logits, temperature, top_k, top_p)
             if repetition_penalty > 1.0:
@@ -681,6 +753,10 @@ class MaskedDiffusionSummarizer(nn.Module):
             "similarity_loss_weight": self.similarity_loss_weight,
             "decoder_type": self.decoder_type,
             "freeze_encoder": self.freeze_encoder,
+            "use_self_conditioning": self.use_self_conditioning,
+            "self_cond_prob": self.self_cond_prob,
+            "unfreeze_encoder_layers": self.unfreeze_encoder_layers,
+            "gradient_checkpointing": self.gradient_checkpointing,
         }
         torch.save(config, os.path.join(save_directory, "config.pt"))
         self.tokenizer.save_pretrained(save_directory)
@@ -693,12 +769,19 @@ class MaskedDiffusionSummarizer(nn.Module):
         config = torch.load(
             os.path.join(save_directory, "config.pt"), map_location="cpu"
         )
+
+        # Handle loading older checkpoints that lack new fields
+        config.setdefault("use_self_conditioning", False)
+        config.setdefault("self_cond_prob", 0.5)
+        config.setdefault("unfreeze_encoder_layers", 0)
+        config.setdefault("gradient_checkpointing", False)
+
         model = cls(**config)
 
         state_dict = torch.load(
             os.path.join(save_directory, "model.pt"),
             map_location=device,
         )
-        model.load_state_dict(state_dict)
+        model.load_state_dict(state_dict, strict=False)
 
         return model.to(device)

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint as grad_checkpoint
 from typing import Optional, Tuple
 import math
 import logging
@@ -345,16 +346,21 @@ class CrossMambaDecoder(nn.Module):
         conv_kernel: int = 4,
         expand_factor: int = 2,
         dropout: float = 0.1,
+        use_gradient_checkpointing: bool = False,
     ):
         super().__init__()
         
         self.hidden_size = hidden_size
+        self.use_gradient_checkpointing = use_gradient_checkpointing
         
         # Token embeddings
         self.token_embedding = nn.Embedding(vocab_size, hidden_size)
         
         # Learnable positional embeddings
         self.position_embedding = nn.Embedding(max_seq_len, hidden_size)
+        
+        # Self-conditioning projection: maps soft embedding back into input space
+        self.self_cond_proj = nn.Linear(hidden_size, hidden_size)
         
         # Timestep embedding
         self.timestep_embedding = TimestepEmbedding(hidden_size)
@@ -393,6 +399,7 @@ class CrossMambaDecoder(nn.Module):
         timesteps: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         encoder_attention_mask: Optional[torch.Tensor] = None,
+        self_cond_emb: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         batch_size, seq_len = input_ids.shape
         
@@ -403,18 +410,33 @@ class CrossMambaDecoder(nn.Module):
         position_ids = self.position_ids[:, :seq_len].expand(batch_size, -1)
         hidden_states = hidden_states + self.position_embedding(position_ids)
         
+        # Add self-conditioning signal from previous denoising step
+        if self_cond_emb is not None:
+            hidden_states = hidden_states + self.self_cond_proj(self_cond_emb)
+        
         # Get timestep embeddings
         timestep_emb = self.timestep_embedding(timesteps)
         
-        # Apply CrossMamba layers
+        # Apply CrossMamba layers (with optional gradient checkpointing)
         for layer in self.layers:
-            hidden_states = layer(
-                hidden_states,
-                encoder_hidden_states,
-                timestep_emb,
-                attention_mask=attention_mask,
-                encoder_attention_mask=encoder_attention_mask,
-            )
+            if self.use_gradient_checkpointing and self.training:
+                hidden_states = grad_checkpoint(
+                    layer,
+                    hidden_states,
+                    encoder_hidden_states,
+                    timestep_emb,
+                    attention_mask,
+                    encoder_attention_mask,
+                    use_reentrant=False,
+                )
+            else:
+                hidden_states = layer(
+                    hidden_states,
+                    encoder_hidden_states,
+                    timestep_emb,
+                    attention_mask=attention_mask,
+                    encoder_attention_mask=encoder_attention_mask,
+                )
         
         # Project to vocabulary
         hidden_states = self.output_norm(hidden_states)

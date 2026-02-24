@@ -1,7 +1,13 @@
-# FRED-T5-1.7B + CrossMamba Diffusion Decoder
+# FRED-T5-1.7B + CrossMamba Diffusion Decoder (v3 — all improvements)
 # Paper: "Discrete Diffusion Language Model for Efficient Text Summarization" (NAACL 2025)
 #
-# RTX 4090 (24 GB VRAM, 32 GB RAM)
+# Improvements over v2:
+#   1. 12-layer decoder (was 6)
+#   2. Self-conditioning (previous prediction fed back into decoder)
+#   3. Knowledge distillation from FRED-T5-Summarizer
+#   4. Curriculum partial encoder unfreezing (last 6 layers after 30k steps)
+#   5. Gradient checkpointing for memory efficiency
+#
 # Run: python train.py --config config/train_config.yaml
 
 seed: 42
@@ -9,7 +15,7 @@ seed: 42
 model:
   encoder: "ai-forever/FRED-T5-1.7B"
   freeze_encoder: true
-  num_decoder_layers: 6
+  num_decoder_layers: 12
   decoder_type: "mamba"
   mamba_state_size: 16
   mamba_conv_kernel: 4
@@ -20,17 +26,35 @@ model:
   similarity_loss_weight: 1.0
   dropout: 0.1
 
+  # Self-conditioning
+  use_self_conditioning: true
+  self_cond_prob: 0.5
+
+  # Curriculum encoder unfreezing
+  unfreeze_encoder_layers: 6
+  unfreeze_after_steps: 30000
+
+  # Memory optimization
+  gradient_checkpointing: true
+
 training:
-  batch_size: 8
-  gradient_accumulation_steps: 4    # effective batch = 32
+  batch_size: 4
+  gradient_accumulation_steps: 8    # effective batch = 32
   learning_rate: 3.0e-5
+  encoder_learning_rate: 1.0e-6     # small lr for unfrozen encoder layers
   weight_decay: 0.01
-  num_epochs: 20
+  num_epochs: 40
   warmup_steps: 5000
   max_grad_norm: 1.0
   mixed_precision: "bf16"
-  early_stopping_patience: 5
+  early_stopping_patience: 10
   output_dir: "checkpoints"
+
+distillation:
+  enabled: true
+  teacher_model: "RussianNLP/FRED-T5-Summarizer"
+  weight: 1.0
+  temperature: 2.0
 
 data:
   dataset: "RussianNLP/Mixed-Summarization-Dataset"
@@ -40,14 +64,17 @@ data:
   cache_dir: null
 
 logging:
-  comet_project: "fred-diffusion-summarization"
+  comet_project: "fred-diffusion-v3"
   tags:
     - "diffusion"
     - "summarization"
     - "russian"
     - "FRED-T5-1.7B"
     - "CrossMamba"
-    - "rtx4090"
+    - "12-layers"
+    - "self-conditioning"
+    - "distillation"
+    - "v3"
   log_every_n_steps: 100
   save_every_n_steps: 5000
   eval_every_n_steps: 2000
