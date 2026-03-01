@@ -34,12 +34,12 @@ model:
   unfreeze_encoder_layers: 6
   unfreeze_after_steps: 30000
 
-  # Memory optimization
-  gradient_checkpointing: true
+  # Memory optimization (disabled: incompatible with fp16 on V100/PyTorch 2.6)
+  gradient_checkpointing: false
 
 training:
-  batch_size: 4
-  gradient_accumulation_steps: 8    # effective batch = 32
+  batch_size: 2
+  gradient_accumulation_steps: 16   # effective batch = 32
   learning_rate: 3.0e-5
   encoder_learning_rate: 1.0e-6     # small lr for unfrozen encoder layers
   weight_decay: 0.01
