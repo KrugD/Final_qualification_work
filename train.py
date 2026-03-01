@@ -1,4 +1,5 @@
 import os
+import shutil
 import argparse
 import logging
 from typing import Dict, Any, Optional
@@ -514,12 +515,21 @@ def train(config: Dict[str, Any], resume_from: Optional[str] = None):
                             f"rougeL={eval_metrics.get('eval_rougeL', 0):.4f}"
                         )
 
-            # Save checkpoint
+            # Save checkpoint (keep only last 2 to save disk space)
             if global_step % save_every == 0:
                 checkpoint_dir = save_dir / f"checkpoint_epoch{epoch+1}_step{global_step}"
                 accelerator.save_state(str(checkpoint_dir))
                 if accelerator.is_main_process:
                     logger.info(f"Checkpoint saved to {checkpoint_dir}")
+                    existing = sorted(
+                        [d for d in save_dir.iterdir()
+                         if d.is_dir() and d.name.startswith("checkpoint_epoch")],
+                        key=lambda d: d.stat().st_mtime,
+                    )
+                    while len(existing) > 2:
+                        old = existing.pop(0)
+                        shutil.rmtree(old)
+                        logger.info(f"Removed old checkpoint: {old.name}")
 
         # End of epoch
         avg_epoch_loss = epoch_loss / max(num_batches, 1)
