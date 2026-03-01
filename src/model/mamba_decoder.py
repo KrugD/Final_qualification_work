@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 try:
     from mamba_ssm import Mamba
     MAMBA_AVAILABLE = True
-except ImportError:
+except (ImportError, RuntimeError, Exception):
     MAMBA_AVAILABLE = False
     logger.info("mamba-ssm not available. Using fallback implementation.")
 
