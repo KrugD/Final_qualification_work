@@ -26,8 +26,8 @@ model:
   similarity_loss_weight: 1.0
   dropout: 0.1
 
-  # Self-conditioning
-  use_self_conditioning: true
+  # Self-conditioning (disabled: hurts early training by feeding back garbage)
+  use_self_conditioning: false
   self_cond_prob: 0.5
 
   # Curriculum encoder unfreezing
@@ -51,7 +51,7 @@ training:
   output_dir: "checkpoints"
 
 distillation:
-  enabled: true
+  enabled: false                       # disabled: conflicting signal with diffusion loss
   teacher_model: "RussianNLP/FRED-T5-Summarizer"
   weight: 1.0
   temperature: 2.0
@@ -72,9 +72,9 @@ logging:
     - "FRED-T5-1.7B"
     - "CrossMamba"
     - "12-layers"
-    - "self-conditioning"
-    - "distillation"
-    - "v3"
+    - "no-distillation"
+    - "no-self-cond"
+    - "v3-fix"
   log_every_n_steps: 100
   save_every_n_steps: 5000
   eval_every_n_steps: 2000
