@@ -83,7 +83,7 @@ class ProtocolPDF(FPDF):
 
 
 def generate_protocol_pdf(
-    correction_df: pd.DataFrame,
+    summarization_df: pd.DataFrame,
     diarization_df: Optional[pd.DataFrame] = None,
     asr_df: Optional[pd.DataFrame] = None,
     audio_duration_min: float = 0,
@@ -93,7 +93,7 @@ def generate_protocol_pdf(
     """Generate a PDF meeting protocol from pipeline results.
     
     Args:
-        correction_df: DataFrame with corrected summaries (speaker, corrected_summary)
+        summarization_df: DataFrame with speaker summaries (speaker, summary)
         diarization_df: Optional DataFrame with diarization results
         asr_df: Optional DataFrame with ASR results (for word counts)
         audio_duration_min: Audio file duration in minutes
@@ -152,10 +152,10 @@ def generate_protocol_pdf(
     pdf.ln(6)
     
     # ---- Speaker summaries ----
-    if correction_df is not None and not correction_df.empty:
-        for idx, row in correction_df.iterrows():
+    if summarization_df is not None and not summarization_df.empty:
+        for idx, row in summarization_df.iterrows():
             speaker = row.get("speaker", f"Спикер {idx}")
-            summary = row.get("corrected_summary", row.get("summary", ""))
+            summary = row.get("summary", "")
             
             # Speaker header with colored background
             pdf.set_fill_color(52, 152, 219)
@@ -193,7 +193,7 @@ def generate_protocol_pdf(
             pdf.ln(6)
             
             # Light separator between speakers
-            if idx < len(correction_df) - 1:
+            if idx < len(summarization_df) - 1:
                 pdf.set_draw_color(220, 220, 220)
                 pdf.set_line_width(0.2)
                 y = pdf.get_y()

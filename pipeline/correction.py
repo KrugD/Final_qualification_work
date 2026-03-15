@@ -128,21 +128,21 @@ def correct_text(input_text, correction_model, correction_tokenizer):
         return input_text, False
 
 
-def perform_correction(input_txt_path=None, output_txt_path=None, summarization_df=None,
+def perform_correction(input_txt_path=None, output_txt_path=None, asr_df=None,
                        correction_model=None, correction_tokenizer=None,
                        progress_callback=None):
-    """Perform text correction on summarization results.
+    """Perform text correction on ASR transcription results.
     
     Args:
-        input_txt_path: Path to input text file with summarization results (CLI mode)
-        output_txt_path: Path for output text file with corrected summaries (CLI mode)
-        summarization_df: DataFrame with summarization results (bot mode, skips TXT parsing)
+        input_txt_path: Path to input text file with ASR results (CLI mode)
+        output_txt_path: Path for output text file with corrected texts (CLI mode)
+        asr_df: DataFrame with ASR results (bot mode, skips TXT parsing)
         correction_model: Optional pre-loaded model (for bot mode)
         correction_tokenizer: Optional pre-loaded tokenizer (for bot mode)
         progress_callback: Optional callback function for progress updates
         
     Returns:
-        DataFrame: DataFrame with corrected summaries
+        DataFrame: DataFrame with corrected texts (adds 'corrected_text' column)
     """
     start_time = time.time()
     
@@ -151,47 +151,47 @@ def perform_correction(input_txt_path=None, output_txt_path=None, summarization_
         correction_model, correction_tokenizer = load_correction_model()
     
     # Use provided DataFrame or parse from TXT file
-    if summarization_df is not None:
-        input_dataframe = summarization_df.copy()
-        print("Using provided summarization DataFrame...")
+    if asr_df is not None:
+        input_dataframe = asr_df.copy()
+        print("Using provided ASR DataFrame...")
     elif input_txt_path:
         input_dataframe = parse_summarization_from_txt(input_txt_path)
     else:
-        print("No summarization data provided")
+        print("No ASR data provided")
         return pd.DataFrame()
     
     if input_dataframe.empty:
-        print("No summarization data found to correct")
+        print("No ASR data found to correct")
         return pd.DataFrame()
     
-    print(f"Correcting {len(input_dataframe)} speaker summaries...")
+    print(f"Correcting {len(input_dataframe)} ASR segments...")
     
-    corrected_summaries = []
+    corrected_texts = []
     
     for index, row in input_dataframe.iterrows():
-        print(f"Correcting summary for {row['speaker']}...")
+        print(f"Correcting text for {row['speaker']} [{row.get('start_time', ''):.1f}s]...")
         
-        original_summary = row["summary"]
-        corrected_summary, success_status = correct_text(
-            original_summary, 
+        original_text = row["text"]
+        corrected_text, success_status = correct_text(
+            original_text, 
             correction_model, 
             correction_tokenizer
         )
         
-        corrected_summaries.append(corrected_summary)
+        corrected_texts.append(corrected_text)
         
-        print(f"Original: {original_summary}")
-        print(f"Corrected: {corrected_summary}")
+        print(f"Original:  {original_text}")
+        print(f"Corrected: {corrected_text}")
         print("---")
     
-    input_dataframe["corrected_summary"] = corrected_summaries
+    input_dataframe["corrected_text"] = corrected_texts
     
     # Save to text file only if path provided (CLI mode)
     if output_txt_path:
         save_correction_to_txt(input_dataframe, output_txt_path)
     
     total_execution_time = time.time() - start_time
-    print(f"Summarization correction completed in {total_execution_time:.2f} seconds")
+    print(f"ASR text correction completed in {total_execution_time:.2f} seconds")
     
     return input_dataframe
 

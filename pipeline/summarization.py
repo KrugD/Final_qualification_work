@@ -103,15 +103,15 @@ def summarize_text(input_text, summarization_model, summarization_tokenizer):
         return input_text[:200] + "...", False
 
 
-def perform_summarization(input_txt_path=None, output_txt_path=None, asr_df=None,
+def perform_summarization(input_txt_path=None, output_txt_path=None, correction_df=None,
                           summarization_model=None, summarization_tokenizer=None,
                           progress_callback=None):
-    """Perform text summarization on ASR results.
+    """Perform text summarization on corrected ASR results.
     
     Args:
         input_txt_path: Path to input text file with ASR results (CLI mode)
         output_txt_path: Path for output text file with summaries (CLI mode)
-        asr_df: DataFrame with ASR results (bot mode, skips TXT parsing)
+        correction_df: DataFrame with corrected ASR texts (bot mode, has 'corrected_text' column)
         summarization_model: Optional pre-loaded model (for bot mode)
         summarization_tokenizer: Optional pre-loaded tokenizer (for bot mode)
         progress_callback: Optional callback function for progress updates
@@ -126,19 +126,17 @@ def perform_summarization(input_txt_path=None, output_txt_path=None, asr_df=None
         summarization_model, summarization_tokenizer = load_summarization_model()
     
     # Use provided DataFrame or parse from TXT file
-    if asr_df is not None:
-        # Convert ASR DataFrame to the format expected by summarization
-        # ASR DataFrame has columns: speaker, start_time, end_time, duration, text, word_count
-        input_dataframe = asr_df.rename(columns={"text": "corrected_text"})
-        print("Using provided ASR DataFrame...")
+    if correction_df is not None:
+        input_dataframe = correction_df.copy()
+        print("Using provided correction DataFrame...")
     elif input_txt_path:
         input_dataframe = parse_asr_from_txt(input_txt_path)
     else:
-        print("No ASR data provided")
+        print("No data provided for summarization")
         return pd.DataFrame()
     
     if input_dataframe.empty:
-        print("No ASR data found to summarize")
+        print("No data found to summarize")
         return pd.DataFrame()
     
     # Group texts by speaker

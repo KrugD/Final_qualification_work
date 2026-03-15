@@ -139,7 +139,7 @@ class QueueWorker:
             await notifier.update_stage("pdf")
             
             pdf_buffer = generate_protocol_pdf(
-                correction_df=result["correction_df"],
+                summarization_df=result["summarization_df"],
                 diarization_df=result["diarization_df"],
                 asr_df=result["asr_df"],
                 audio_duration_min=result["audio_duration_min"],

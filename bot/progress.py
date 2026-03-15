@@ -15,8 +15,8 @@ STAGES = {
     "converting":    {"label": "Конвертация аудио",      "icon": "🔄", "percent": 8},
     "diarization":   {"label": "Диаризация спикеров",    "icon": "🎙", "percent": 15},
     "asr":           {"label": "Распознавание речи",     "icon": "📝", "percent": 35},
-    "summarization": {"label": "Суммаризация текста",    "icon": "📋", "percent": 60},
-    "correction":    {"label": "Коррекция текста",       "icon": "✏️", "percent": 80},
+    "correction":    {"label": "Коррекция текста",       "icon": "✏️", "percent": 55},
+    "summarization": {"label": "Суммаризация текста",    "icon": "📋", "percent": 75},
     "clustering":    {"label": "Кластеризация спикеров", "icon": "📊", "percent": 90},
     "pdf":           {"label": "Генерация PDF",          "icon": "📄", "percent": 95},
     "done":          {"label": "Готово",                  "icon": "✅", "percent": 100},
@@ -25,7 +25,7 @@ STAGES = {
 
 STAGE_ORDER = [
     "downloading", "converting", "diarization", "asr",
-    "summarization", "correction", "clustering", "pdf", "done"
+    "correction", "summarization", "clustering", "pdf", "done"
 ]
 
 

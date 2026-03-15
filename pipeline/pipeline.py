@@ -119,15 +119,34 @@ def run_pipeline_in_memory(audio_file_path, force_clustering=False,
             return result
         
         result['asr_df'] = asr_df
-        notify("summarization", 55)
+        notify("correction", 55)
         
-        # --- Stage 3: Summarization ---
-        print("\n3. SUMMARIZATION STAGE")
+        # --- Stage 3: Correction ---
+        print("\n3. CORRECTION STAGE")
+        
+        corr_model, corr_tokenizer = models.get('correction', (None, None))
+        
+        correction_df = perform_correction(
+            asr_df=asr_df,
+            correction_model=corr_model,
+            correction_tokenizer=corr_tokenizer,
+        )
+        
+        if correction_df.empty:
+            print("Correction failed - stopping pipeline")
+            notify("error", 0)
+            return result
+        
+        result['correction_df'] = correction_df
+        notify("summarization", 75)
+        
+        # --- Stage 4: Summarization ---
+        print("\n4. SUMMARIZATION STAGE")
         
         summ_model, summ_tokenizer = models.get('summarization', (None, None))
         
         summarization_df = perform_summarization(
-            asr_df=asr_df,
+            correction_df=correction_df,
             summarization_model=summ_model,
             summarization_tokenizer=summ_tokenizer,
         )
@@ -138,20 +157,6 @@ def run_pipeline_in_memory(audio_file_path, force_clustering=False,
             return result
         
         result['summarization_df'] = summarization_df
-        notify("correction", 75)
-        
-        # --- Stage 4: Correction ---
-        print("\n4. CORRECTION STAGE")
-        
-        corr_model, corr_tokenizer = models.get('correction', (None, None))
-        
-        correction_df = perform_correction(
-            summarization_df=summarization_df,
-            correction_model=corr_model,
-            correction_tokenizer=corr_tokenizer,
-        )
-        
-        result['correction_df'] = correction_df
         notify("clustering", 90)
         
         # --- Optional: Clustering ---
@@ -260,17 +265,17 @@ def run_complete_pipeline(audio_file_path, output_dir):
         print("Speech recognition failed - stopping pipeline")
         return False
     
-    # 3. Summarization
-    print("\n3. SUMMARIZATION STAGE")
-    summarization_dataframe = perform_summarization(asr_output_path, summarization_output_path)
+    # 3. Correction
+    print("\n3. CORRECTION STAGE")
+    correction_dataframe = perform_correction(asr_output_path, correction_output_path)
     
-    if summarization_dataframe.empty:
-        print("Summarization failed - stopping pipeline")
+    if correction_dataframe.empty:
+        print("Correction failed - stopping pipeline")
         return False
     
-    # 4. Correction
-    print("\n4. CORRECTION STAGE (Summarization Correction)")
-    correction_dataframe = perform_correction(summarization_output_path, correction_output_path)
+    # 4. Summarization
+    print("\n4. SUMMARIZATION STAGE")
+    summarization_dataframe = perform_summarization(correction_output_path, summarization_output_path)
     
     print("\n" + "=" * 60)
     print("PIPELINE COMPLETED SUCCESSFULLY")
@@ -453,8 +458,8 @@ def process_long_audio_with_clustering(audio_file_path, base_output_dir="pipelin
         summarization_output_path = os.path.join(final_output_dir, f"{audio_filename}_summarization.txt")
         correction_output_path = os.path.join(final_output_dir, f"{audio_filename}_correction.txt")
         
-        perform_summarization(combined_asr_path, summarization_output_path)
-        perform_correction(summarization_output_path, correction_output_path)
+        perform_correction(combined_asr_path, correction_output_path)
+        perform_summarization(correction_output_path, summarization_output_path)
         
         print(f"Final results with global speaker IDs saved to {final_output_dir}")
         return True
