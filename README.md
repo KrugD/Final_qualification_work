@@ -1,255 +1,171 @@
-# Offline Meeting Transcription Pipeline
+# SpeechProtocol: End-to-End Audio → Meeting Protocol
 
-Система автоматического протоколирования офлайн переговоров с использованием нейросетевой обработки речи и больших языковых моделей.
+Мультимодальная архитектура для генерации протоколов встреч из аудио.
+Заменяет пятиэтапный пайплайн (диаризация → ASR → коррекция → суммаризация → кластеризация)
+единой end-to-end моделью.
 
-## Описание
+## Архитектура
 
-Проект реализует полный пайплайн обработки аудиозаписей совещаний и переговоров:
+```mermaid
+flowchart TD
+    AudioInput["Аудио (WAV, 16kHz)"] --> ChunkSplit["Разбиение на окна (30 сек, overlap 5 сек)"]
 
-1. **Диаризация (Diarization)** — определение говорящих и временных меток их речи
-2. **Распознавание речи (ASR)** — транскрибация аудио в текст
-3. **Коррекция текста (Correction)** — исправление ошибок в транскрибированном тексте
-4. **Суммаризация (Summarization)** — создание краткого содержания для каждого спикера
-5. **Кластеризация спикеров (Speaker Clustering)** — объединение спикеров из разных частей длинных аудиофайлов
+    ChunkSplit --> WhisperEnc["Whisper Encoder\n(frozen, ~120M params)\nopenai/whisper-small"]
+    ChunkSplit --> SpeakerEnc["ECAPA-TDNN\n(frozen, ~6M params)\nspeechbrain/spkrec-ecapa-voxceleb"]
+
+    WhisperEnc --> ContentFeats["Контентные признаки\n(T=1500, d=768)"]
+    SpeakerEnc --> SpeakerEmbs["Эмбеддинги спикеров\n(N_windows, d=192)"]
+
+    ContentFeats --> FusionAdapter
+    SpeakerEmbs --> FusionAdapter
+
+    subgraph FusionAdapter ["Speaker-Content Fusion Adapter (trainable, ~25M params)"]
+        SpeakerProj["Speaker Projection\n192 → 768"]
+        TemporalAlign["Temporal Alignment\n(interpolation)"]
+        CrossAttn["Cross-Attention\ncontent × speaker (8 heads)"]
+        QFormer["Q-Former Compression\n64 learnable queries\n4 TransformerDecoder layers\n1500 → 64 tokens"]
+        OutputProj["Output Projection\n768 → 2048"]
+        SpeakerProj --> TemporalAlign --> CrossAttn --> QFormer --> OutputProj
+    end
+
+    FusionAdapter --> AudioTokens["Speaker-Attributed Tokens\n(64, d=2048)"]
+    AudioTokens --> Decoder["Qwen2.5-3B + LoRA\n(r=16, alpha=32)\n~8M trainable params\nQwen/Qwen2.5-3B"]
+    Decoder --> ProtocolText["Текст протокола\nпо спикерам"]
+```
+
+### Сводка параметров
+
+| Компонент | Модель | Параметры | Обучаемые |
+|-----------|--------|-----------|-----------|
+| Audio Encoder | `openai/whisper-small` | ~120M | 0 (frozen) |
+| Speaker Encoder | `speechbrain/spkrec-ecapa-voxceleb` | ~6M | 0 (frozen) |
+| Fusion Adapter | Custom (Q-Former) | ~25M | ~25M |
+| LLM Decoder | `Qwen/Qwen2.5-3B` + LoRA | ~3B | ~8M (LoRA) |
+| **Итого** | | **~3.15B** | **~33M (1.05%)** |
+
+## Опорные работы
+
+| Статья | Год | Ключевая идея | Ссылка |
+|--------|-----|---------------|--------|
+| **SpeakerLM**: End-to-End Versatile Speaker Diarization and Recognition with Multimodal Large Language Models | AAAI 2025 | Единая MLLM для совместной диаризации и ASR через audio encoder + projector + LLM | [arXiv:2508.06372](https://arxiv.org/abs/2508.06372) |
+| **SALMONN**: Towards Generic Hearing Abilities for Large Language Models | 2024 | Двойной аудио-энкодер (Whisper + BEATs), Q-Former адаптер, LLM-декодер | [arXiv:2310.13289](https://arxiv.org/abs/2310.13289) |
+| **Qwen2-Audio**: A Large-Scale Audio-Language Model | 2024 | Whisper-large-v3 энкодер + Qwen-7B, трёхэтапное обучение | [arXiv:2407.10759](https://arxiv.org/abs/2407.10759) |
+| **FastSLM**: Hierarchical Frame Q-Former for Effective Speech Modality Adaptation | 2025 | Иерархический Q-Former для сжатия аудио-токенов до 1.67 ток/сек | [arXiv:2601.06199](https://arxiv.org/abs/2601.06199) |
+| **DiariST**: Streaming Speech Translation with Speaker Diarization | 2024 | Совместная диаризация и перевод речи на базе Whisper | [IEEE Xplore](https://ieeexplore.ieee.org/document/10446050/) |
+| **UME**: Unified Multi-Speaker Encoder | 2025 | Общий энкодер для диаризации, разделения и multi-speaker ASR | [arXiv:2508.20474](https://arxiv.org/abs/2508.20474) |
+
+## Стратегия обучения
+
+```mermaid
+flowchart LR
+    subgraph Stage1 ["Stage 1: Audio-Text Alignment"]
+        S1Data["Golos / CommonVoice RU\n~100K samples"]
+        S1Task["ASR: аудио → транскрипция"]
+        S1Train["Обучаемое: Fusion Adapter\nLLM frozen"]
+        S1Data --> S1Task --> S1Train
+    end
+
+    subgraph Stage15 ["Stage 1.5: Text Summarization"]
+        S15Data["RussianNLP/Mixed-Summarization\n~50K samples"]
+        S15Task["Текст → саммари"]
+        S15Train["Обучаемое: LoRA на Qwen\nAdapter frozen"]
+        S15Data --> S15Task --> S15Train
+    end
+
+    subgraph Stage2 ["Stage 2: Protocol Generation"]
+        S2Data["Пары аудио + протокол\n+ аугментации"]
+        S2Task["Аудио → протокол по спикерам"]
+        S2Train["Обучаемое: Adapter + LoRA"]
+        S2Data --> S2Task --> S2Train
+    end
+
+    Stage1 --> Stage15 --> Stage2
+```
+
+### Запуск обучения
+
+```bash
+# Stage 1: Audio-text alignment (ASR)
+python -m training.train --stage 1
+
+# Stage 1.5: Text summarization (LoRA only, no audio)
+python -m training.train --stage 1.5
+
+# Stage 2: Protocol generation (adapter + LoRA, end-to-end)
+python -m training.train --stage 2
+
+# Возобновление с чекпоинта
+python -m training.train --stage 2 --resume checkpoints/stage2/step_1000
+```
+
+### Данные
+
+| Стадия | Датасет | Объём | Источник |
+|--------|---------|-------|----------|
+| Stage 1 | Golos (farfield) | ~100K сэмплов | [SberDevices/Golos](https://huggingface.co/datasets/SberDevices/Golos) |
+| Stage 1.5 | Mixed-Summarization | ~198K сэмплов | [RussianNLP/Mixed-Summarization-Dataset](https://huggingface.co/datasets/RussianNLP/Mixed-Summarization-Dataset) |
+| Stage 2 | Собственный датасет | 500–2000 пар | `data/protocols/` (audio.wav + protocol.txt) |
+
+### Аугментации
+
+- **Аудио**: Gaussian noise, pitch shift, time stretch, gain perturbation (audiomentations)
+- **SpecAugment**: Частотное и временное маскирование мел-спектрограмм
+- **Спикерные**: Перемешивание speaker ID в протоколе
+- **Текстовые**: Парафраз, изменение детализации
+
+### Оборудование
+
+- NVIDIA V100 32GB
+- ~21–25 GB VRAM при обучении (fp16 + gradient checkpointing)
+
+## Инференс
+
+```bash
+python -m inference.generate \
+    --audio path/to/meeting.wav \
+    --checkpoint checkpoints/stage2/best \
+    --output protocol.txt
+```
+
+Поддерживается длинное аудио (>30 сек) через chunking с overlap.
+
+## Оценка
+
+```bash
+python -m evaluation.evaluate \
+    --checkpoint checkpoints/stage2/best \
+    --test-data data/protocols_test
+```
+
+Метрики: ROUGE-1/2/L, BERTScore (ruBERT), Speaker Attribution Accuracy, время инференса.
+
+## Логирование
+
+CometML — ключ и проект в `.env`:
+
+```
+COMET_API_KEY=...
+COMET_PROJECT_NAME=speech-protocol
+```
 
 ## Структура проекта
 
 ```
-Final_qualification_work/
-├── pipeline/                      # Основные модули пайплайна
-│   ├── __init__.py               # Экспорты модуля
-│   ├── pipeline.py               # Главный скрипт запуска пайплайна
-│   ├── diarization.py            # Модуль диаризации спикеров
-│   ├── asr.py                    # Модуль распознавания речи
-│   ├── correction.py             # Модуль коррекции текста
-│   ├── summarization.py          # Модуль суммаризации текста
-│   └── speaker_clustering.py     # Модуль кластеризации спикеров
-│
-├── bot/                           # Telegram-бот
-│   ├── __init__.py
-│   ├── main.py                   # Точка входа бота
-│   ├── handlers.py               # Обработчики сообщений
-│   ├── queue_worker.py           # Воркер задач из Redis
-│   ├── redis_client.py           # Клиент Redis
-│   ├── pdf_generator.py          # Генерация PDF-протокола
-│   ├── keyboards.py              # Inline-клавиатуры
-│   └── progress.py               # Уведомления о прогрессе
-│
-├── utils/                         # Вспомогательные модули
-│   ├── __init__.py
-│   ├── config.py                 # Конфигурация моделей и параметров
-│   └── models.py                 # Функции загрузки моделей
-│
-├── audio_test/                    # Директория для входных аудиофайлов
-│
-├── pipeline_output/               # Директория с результатами обработки
-│   └── <audio_name>/
-│       ├── <audio_name>_diarization.txt
-│       ├── <audio_name>_asr.txt
-│       ├── <audio_name>_correction.txt
-│       ├── <audio_name>_summarization.txt
-│       ├── speaker_clusters_visualization.png  # Для длинных аудио
-│       └── clustering_metrics_report.txt       # Для длинных аудио
-│
-├── docker-compose.yml             # Redis + Telegram Bot API Local Server
-├── run.py                         # Точка входа для CLI-пайплайна
-├── pyproject.toml                 # Зависимости проекта
-├── uv.lock                        # Lock-файл зависимостей
-├── .env                           # Переменные окружения
-└── README.md
+├── model/
+│   ├── config.py                  # ModelConfig dataclass
+│   ├── audio_encoder.py           # Whisper encoder wrapper
+│   ├── speaker_encoder.py         # ECAPA-TDNN wrapper
+│   ├── fusion_adapter.py          # Speaker-Content Fusion + Q-Former
+│   └── speech_protocol_model.py   # Full model with LoRA
+├── training/
+│   ├── augmentations.py           # Audio/text/SpecAugment
+│   ├── dataset.py                 # ASR/Summarization/Protocol datasets
+│   ├── collator.py                # Batch padding
+│   ├── train_config.yaml          # Hyperparameters
+│   └── train.py                   # Training script (all stages)
+├── inference/
+│   └── generate.py                # Audio → protocol text
+├── evaluation/
+│   ├── metrics.py                 # ROUGE, BERTScore, Speaker Accuracy
+│   └── evaluate.py                # Evaluation script
 ```
-
-## Используемые модели
-
-| Задача | Модель |
-|--------|--------|
-| Диаризация | `pyannote/speaker-diarization-3.1` |
-| Распознавание речи | `openai/whisper-small` |
-| Коррекция текста | `ai-forever/sage-m2m100-1.2B` |
-| Суммаризация | `RussianNLP/FRED-T5-Summarizer` |
-| Эмбеддинги спикеров | `pyannote/embedding` |
-
-## Требования
-
-- Python >= 3.10
-- CUDA (рекомендуется для ускорения)
-- HuggingFace токен с доступом к моделям pyannote
-
-## Установка
-
-### 1. Клонирование репозитория
-
-```bash
-git clone <repository-url>
-cd Final_qualification_work
-```
-
-### 2. Установка зависимостей
-
-С использованием [uv](https://github.com/astral-sh/uv):
-
-```bash
-uv sync
-```
-
-Или с использованием pip:
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Настройка переменных окружения
-
-Создайте файл `.env` в корне проекта:
-
-```env
-# Обязательно
-HF_TOKEN=your_huggingface_token_here
-
-# Для Telegram-бота
-TELEGRAM_BOT_TOKEN=your_bot_token_here
-TELEGRAM_API_ID=your_api_id
-TELEGRAM_API_HASH=your_api_hash
-
-# Local API Server (true — для файлов > 20 МБ, требует docker)
-USE_LOCAL_API=false
-
-# Redis
-REDIS_URL=redis://localhost:6379/0
-```
-
-Для получения HuggingFace токена:
-1. Зарегистрируйтесь на [HuggingFace](https://huggingface.co/)
-2. Примите условия использования модели [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
-3. Создайте токен в настройках аккаунта
-
-Для получения Telegram-токенов:
-1. Создайте бота через [@BotFather](https://t.me/BotFather) и получите `TELEGRAM_BOT_TOKEN`
-2. Получите `TELEGRAM_API_ID` и `TELEGRAM_API_HASH` на [my.telegram.org](https://my.telegram.org/)
-
-## Использование
-
-### Запуск через uv (рекомендуется)
-
-Все команды выполняются из **корневой папки проекта**:
-
-```bash
-# Обработка конкретного аудиофайла
-uv run python run.py --audio-file your_audio.wav
-
-# Обработка всех файлов в директории audio_test/
-uv run python run.py
-
-# С принудительным анализом спикеров (визуализация + метрики)
-uv run python run.py --audio-file your_audio.wav --force-clustering
-```
-
-### Запуск через python (без uv)
-
-```bash
-# Из корневой папки
-python run.py --audio-file your_audio.wav
-
-# Или перейдя в папку pipeline
-cd pipeline
-python pipeline.py --audio-file your_audio.wav
-```
-
-### Запуск Telegram-бота
-
-Бот использует Redis для очереди задач. Запустите Redis через Docker и затем бота:
-
-```bash
-# 1. Поднять Redis (обязательно)
-docker-compose up -d redis
-
-# 2. Запустить бота
-uv run python -m bot.main
-```
-
-Для поддержки файлов > 20 МБ (до 2 ГБ) можно также поднять Telegram Bot API Local Server:
-
-```bash
-# Поднять Redis + Local API Server
-docker-compose up -d
-
-# Установить USE_LOCAL_API=true в .env, затем запустить бота
-uv run python -m bot.main
-```
-
-### Запуск отдельных модулей
-
-Из папки `pipeline/`:
-
-```bash
-cd pipeline
-
-# Только диаризация
-python diarization.py
-
-# Только распознавание речи (требуется файл диаризации)
-python asr.py
-
-# Только коррекция (требуется файл ASR)
-python correction.py
-
-# Только суммаризация (требуется файл коррекции)
-python summarization.py
-```
-
-## Выходные файлы
-
-После обработки аудиофайла создаются следующие файлы:
-
-| Файл | Описание |
-|------|----------|
-| `*_diarization.txt` | Результаты диаризации с временными метками |
-| `*_asr.txt` | Транскрипция речи по спикерам |
-| `*_correction.txt` | Исправленный текст транскрипции |
-| `*_summarization.txt` | Краткое содержание речи каждого спикера |
-
-### Для длинных аудиофайлов (> 50 минут) или с флагом `--force-clustering`
-
-| Файл | Описание |
-|------|----------|
-| `speaker_clusters_visualization.png` | Визуализация кластеров спикеров (t-SNE, PCA) |
-| `clustering_metrics_report.txt` | Метрики качества кластеризации |
-
-> **Примечание:** Для коротких файлов используйте флаг `--force-clustering`, чтобы получить визуализацию и метрики.
-
-## Метрики качества кластеризации
-
-Система вычисляет следующие метрики (автоматически для длинных файлов или с `--force-clustering`):
-
-- **Silhouette Score** — мера схожести точек с их кластером (от -1 до 1, выше лучше)
-- **Calinski-Harabasz Index** — отношение межкластерной к внутрикластерной дисперсии
-- **Davies-Bouldin Index** — средняя схожесть между кластерами (ниже лучше)
-
-## Конфигурация
-
-Параметры моделей настраиваются в файле `utils/config.py`:
-
-```python
-# Минимальная длительность сегмента речи
-MIN_SEGMENT_DURATION = 0.5  # секунды
-
-# Максимум токенов на вход суммаризатора (FRED-T5)
-MAX_SUMMARY_INPUT_TOKENS = 512
-
-# Максимальный зазор для объединения соседних сегментов одного спикера
-MERGE_GAP_SECONDS = 2.0  # секунды
-
-# Порог расстояния для кластеризации спикеров
-CLUSTERING_DISTANCE_THRESHOLD = 0.4
-
-# Порог для определения длинного аудио
-MAX_CHUNK_DURATION = 50  # минуты
-```
-
-## Лицензия
-
-MIT License
-
-## Автор
-
-Выпускная квалификационная работа на тему: "Протоколирование офлайн переговоров с использованием нейросетевой обработки речи и больших языковых моделей"

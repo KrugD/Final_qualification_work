@@ -1,22 +1,27 @@
 [project]
-name = "final-qualification-work"
+name = "speech-protocol"
 version = "0.1.0"
-description = "Telegram bot for meeting transcription and summarization"
+description = "End-to-end multimodal model for meeting protocol generation from audio"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "librosa>=0.11.0",
-    "omegaconf>=2.3.0",
-    "pandas>=2.3.3",
-    "protobuf>=6.33.0",
-    "pyannote-audio>=4.0.1",
+    "torch>=2.1.0",
+    "transformers>=4.40.0",
+    "peft>=0.10.0",
+    "speechbrain>=1.0.0",
+    "datasets>=2.18.0",
+    "accelerate>=0.28.0",
+    "comet-ml>=3.39.0",
+    "evaluate>=0.4.0",
+    "bert-score>=0.3.13",
+    "rouge-score>=0.1.2",
+    "librosa>=0.10.0",
+    "soundfile>=0.12.0",
+    "audiomentations>=0.36.0",
+    "sentencepiece>=0.2.0",
+    "protobuf>=4.25.0",
     "pydub>=0.25.1",
-    "python-dotenv>=1.1.1",
-    "seaborn>=0.13.2",
-    "sentencepiece>=0.2.1",
-    "torch>=2.9.0",
-    "transformers>=4.57.1",
-    "aiogram>=3.15.0",
-    "fpdf2>=2.8.0",
-    "redis[hiredis]>=5.0.0",
+    "pandas>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "PyYAML>=6.0",
 ]

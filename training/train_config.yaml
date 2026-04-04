@@ -1,0 +1,64 @@
+# V100 32GB training configuration
+
+model:
+  whisper_model: "openai/whisper-small"
+  speaker_model: "speechbrain/spkrec-ecapa-voxceleb"
+  llm_model: "Qwen/Qwen2.5-3B"
+  num_query_tokens: 64
+  adapter_num_layers: 4
+  lora_r: 16
+  lora_alpha: 32
+
+stage1:
+  description: "Audio-text alignment (ASR)"
+  dataset: "SberDevices/Golos"
+  dataset_subset: "farfield"
+  max_samples: 100000
+  epochs: 3
+  lr: 1.0e-4
+  batch_size: 4
+  gradient_accumulation_steps: 8
+  warmup_ratio: 0.05
+  weight_decay: 0.01
+  max_audio_sec: 30
+  max_target_len: 512
+  train_adapter_only: true
+  augment: true
+
+stage1_5:
+  description: "Text summarization (LoRA only, no audio)"
+  dataset: "RussianNLP/Mixed-Summarization-Dataset"
+  max_samples: 50000
+  epochs: 2
+  lr: 2.0e-5
+  batch_size: 8
+  gradient_accumulation_steps: 4
+  warmup_ratio: 0.05
+  weight_decay: 0.01
+  max_input_len: 1024
+  max_target_len: 256
+  train_lora_only: true
+
+stage2:
+  description: "Protocol generation (adapter + LoRA)"
+  data_path: "data/protocols"
+  epochs: 15
+  lr: 5.0e-5
+  batch_size: 2
+  gradient_accumulation_steps: 16
+  warmup_ratio: 0.1
+  weight_decay: 0.01
+  max_audio_sec: 30
+  max_target_len: 1024
+  augment: true
+
+checkpointing:
+  output_dir: "checkpoints"
+  save_every_n_steps: 500
+  eval_every_n_steps: 250
+  gradient_checkpointing: true
+
+hardware:
+  fp16: true
+  device: "cuda"
+  num_workers: 4
