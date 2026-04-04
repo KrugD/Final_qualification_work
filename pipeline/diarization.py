@@ -29,20 +29,72 @@ def save_diarization_to_txt(dataframe, output_txt_path):
             file.write("-" * 30 + "\n")
 
 
-def perform_diarization(audio_file_path, output_txt_path):
-    """Perform speaker diarization on audio file."""
+def merge_consecutive_segments(dataframe, max_gap=None):
+    """Merge consecutive segments from the same speaker.
+    
+    If the same speaker has consecutive segments with a gap smaller than max_gap,
+    they are merged into a single segment. This reduces fragmentation and improves
+    downstream ASR quality by providing more context.
+    
+    Args:
+        dataframe: DataFrame with columns: speaker, start_time, end_time, duration
+        max_gap: Maximum gap in seconds to merge (default from config)
+        
+    Returns:
+        DataFrame: Merged segments
+    """
+    if max_gap is None:
+        max_gap = ModelConfig.MERGE_GAP_SECONDS
+    
+    if dataframe.empty:
+        return dataframe
+    
+    df = dataframe.sort_values("start_time").reset_index(drop=True)
+    
+    merged = []
+    current = df.iloc[0].to_dict()
+    
+    for i in range(1, len(df)):
+        row = df.iloc[i]
+        
+        if row['speaker'] == current['speaker'] and (row['start_time'] - current['end_time']) <= max_gap:
+            current['end_time'] = row['end_time']
+            current['duration'] = current['end_time'] - current['start_time']
+        else:
+            merged.append(current)
+            current = row.to_dict()
+    
+    merged.append(current)
+    
+    result = pd.DataFrame(merged).reset_index(drop=True)
+    print(f"Merged {len(dataframe)} segments into {len(result)} segments")
+    return result
+
+
+def perform_diarization(audio_file_path, output_txt_path=None, diarization_model=None,
+                        progress_callback=None):
+    """Perform speaker diarization on audio file.
+    
+    Args:
+        audio_file_path: Path to input audio file
+        output_txt_path: Optional path for output text file (for CLI compatibility)
+        diarization_model: Optional pre-loaded diarization model (for bot mode)
+        progress_callback: Optional callback function for progress updates
+        
+    Returns:
+        DataFrame: DataFrame with diarization results
+    """
     start_time = time.time()
     
-    print("Loading diarization model...")
-    diarization_pipeline = load_diarization_model()
+    if diarization_model is None:
+        print("Loading diarization model...")
+        diarization_model = load_diarization_model()
     
     print("Performing diarization...")
-    diarization = diarization_pipeline(audio_file_path)
-    audio = AudioSegment.from_file(audio_file_path)
+    diarization = diarization_model(audio_file_path)
     
     segments = []
     
-    # Correct way to access diarization results in new pyannote
     for segment, track, speaker in diarization.speaker_diarization.itertracks(yield_label=True):
         if segment.end - segment.start < ModelConfig.MIN_SEGMENT_DURATION:
             continue
@@ -60,8 +112,11 @@ def perform_diarization(audio_file_path, output_txt_path):
     if not results_dataframe.empty:
         results_dataframe = results_dataframe.sort_values("start_time").reset_index(drop=True)
         
-        # Save to text file
-        save_diarization_to_txt(results_dataframe, output_txt_path)
+        # Merge consecutive segments from the same speaker
+        results_dataframe = merge_consecutive_segments(results_dataframe)
+        
+        if output_txt_path:
+            save_diarization_to_txt(results_dataframe, output_txt_path)
         
         execution_time = time.time() - start_time
         print(f"Diarization completed in {execution_time:.2f} seconds")

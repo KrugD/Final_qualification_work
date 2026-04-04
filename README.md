@@ -8,8 +8,8 @@
 
 1. **Диаризация (Diarization)** — определение говорящих и временных меток их речи
 2. **Распознавание речи (ASR)** — транскрибация аудио в текст
-3. **Суммаризация (Summarization)** — создание краткого содержания для каждого спикера
-4. **Коррекция текста (Correction)** — исправление ошибок в суммаризированном тексте
+3. **Коррекция текста (Correction)** — исправление ошибок в транскрибированном тексте
+4. **Суммаризация (Summarization)** — создание краткого содержания для каждого спикера
 5. **Кластеризация спикеров (Speaker Clustering)** — объединение спикеров из разных частей длинных аудиофайлов
 
 ## Структура проекта
@@ -21,9 +21,19 @@ Final_qualification_work/
 │   ├── pipeline.py               # Главный скрипт запуска пайплайна
 │   ├── diarization.py            # Модуль диаризации спикеров
 │   ├── asr.py                    # Модуль распознавания речи
-│   ├── summarization.py          # Модуль суммаризации текста
 │   ├── correction.py             # Модуль коррекции текста
+│   ├── summarization.py          # Модуль суммаризации текста
 │   └── speaker_clustering.py     # Модуль кластеризации спикеров
+│
+├── bot/                           # Telegram-бот
+│   ├── __init__.py
+│   ├── main.py                   # Точка входа бота
+│   ├── handlers.py               # Обработчики сообщений
+│   ├── queue_worker.py           # Воркер задач из Redis
+│   ├── redis_client.py           # Клиент Redis
+│   ├── pdf_generator.py          # Генерация PDF-протокола
+│   ├── keyboards.py              # Inline-клавиатуры
+│   └── progress.py               # Уведомления о прогрессе
 │
 ├── utils/                         # Вспомогательные модули
 │   ├── __init__.py
@@ -36,15 +46,16 @@ Final_qualification_work/
 │   └── <audio_name>/
 │       ├── <audio_name>_diarization.txt
 │       ├── <audio_name>_asr.txt
-│       ├── <audio_name>_summarization.txt
 │       ├── <audio_name>_correction.txt
+│       ├── <audio_name>_summarization.txt
 │       ├── speaker_clusters_visualization.png  # Для длинных аудио
 │       └── clustering_metrics_report.txt       # Для длинных аудио
 │
-├── run.py                         # Точка входа для запуска пайплайна
+├── docker-compose.yml             # Redis + Telegram Bot API Local Server
+├── run.py                         # Точка входа для CLI-пайплайна
 ├── pyproject.toml                 # Зависимости проекта
 ├── uv.lock                        # Lock-файл зависимостей
-├── .env                           # Переменные окружения (HF_TOKEN)
+├── .env                           # Переменные окружения
 └── README.md
 ```
 
@@ -54,8 +65,8 @@ Final_qualification_work/
 |--------|--------|
 | Диаризация | `pyannote/speaker-diarization-3.1` |
 | Распознавание речи | `openai/whisper-small` |
-| Суммаризация | `RussianNLP/FRED-T5-Summarizer` |
 | Коррекция текста | `ai-forever/sage-m2m100-1.2B` |
+| Суммаризация | `RussianNLP/FRED-T5-Summarizer` |
 | Эмбеддинги спикеров | `pyannote/embedding` |
 
 ## Требования
@@ -92,13 +103,29 @@ pip install -r requirements.txt
 Создайте файл `.env` в корне проекта:
 
 ```env
+# Обязательно
 HF_TOKEN=your_huggingface_token_here
+
+# Для Telegram-бота
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_API_ID=your_api_id
+TELEGRAM_API_HASH=your_api_hash
+
+# Local API Server (true — для файлов > 20 МБ, требует docker)
+USE_LOCAL_API=false
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
 ```
 
-Для получения токена:
+Для получения HuggingFace токена:
 1. Зарегистрируйтесь на [HuggingFace](https://huggingface.co/)
 2. Примите условия использования модели [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
 3. Создайте токен в настройках аккаунта
+
+Для получения Telegram-токенов:
+1. Создайте бота через [@BotFather](https://t.me/BotFather) и получите `TELEGRAM_BOT_TOKEN`
+2. Получите `TELEGRAM_API_ID` и `TELEGRAM_API_HASH` на [my.telegram.org](https://my.telegram.org/)
 
 ## Использование
 
@@ -128,6 +155,28 @@ cd pipeline
 python pipeline.py --audio-file your_audio.wav
 ```
 
+### Запуск Telegram-бота
+
+Бот использует Redis для очереди задач. Запустите Redis через Docker и затем бота:
+
+```bash
+# 1. Поднять Redis (обязательно)
+docker-compose up -d redis
+
+# 2. Запустить бота
+uv run python -m bot.main
+```
+
+Для поддержки файлов > 20 МБ (до 2 ГБ) можно также поднять Telegram Bot API Local Server:
+
+```bash
+# Поднять Redis + Local API Server
+docker-compose up -d
+
+# Установить USE_LOCAL_API=true в .env, затем запустить бота
+uv run python -m bot.main
+```
+
 ### Запуск отдельных модулей
 
 Из папки `pipeline/`:
@@ -141,11 +190,11 @@ python diarization.py
 # Только распознавание речи (требуется файл диаризации)
 python asr.py
 
-# Только суммаризация (требуется файл ASR)
-python summarization.py
-
-# Только коррекция (требуется файл суммаризации)
+# Только коррекция (требуется файл ASR)
 python correction.py
+
+# Только суммаризация (требуется файл коррекции)
+python summarization.py
 ```
 
 ## Выходные файлы
@@ -156,8 +205,8 @@ python correction.py
 |------|----------|
 | `*_diarization.txt` | Результаты диаризации с временными метками |
 | `*_asr.txt` | Транскрипция речи по спикерам |
+| `*_correction.txt` | Исправленный текст транскрипции |
 | `*_summarization.txt` | Краткое содержание речи каждого спикера |
-| `*_correction.txt` | Исправленные суммаризации |
 
 ### Для длинных аудиофайлов (> 50 минут) или с флагом `--force-clustering`
 
@@ -184,8 +233,11 @@ python correction.py
 # Минимальная длительность сегмента речи
 MIN_SEGMENT_DURATION = 0.5  # секунды
 
-# Максимальная длина текста для суммаризации
-MAX_SUMMARY_INPUT_LENGTH = 2000  # символы
+# Максимум токенов на вход суммаризатора (FRED-T5)
+MAX_SUMMARY_INPUT_TOKENS = 512
+
+# Максимальный зазор для объединения соседних сегментов одного спикера
+MERGE_GAP_SECONDS = 2.0  # секунды
 
 # Порог расстояния для кластеризации спикеров
 CLUSTERING_DISTANCE_THRESHOLD = 0.4

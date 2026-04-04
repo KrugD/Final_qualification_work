@@ -1,3 +1,4 @@
+import re
 import time
 import sys
 import os
@@ -5,103 +6,38 @@ import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from utils.config import get_device
 from utils.models import load_correction_model
 
 
+MAX_CHUNK_CHARS = 500
+
+
 def save_correction_to_txt(dataframe, output_txt_path):
-    """Save corrected summary results to text file.
+    """Save corrected ASR results to text file.
     
     Args:
-        dataframe: DataFrame with corrected summary results
+        dataframe: DataFrame with corrected ASR results (must have 'text' and 'corrected_text')
         output_txt_path: Path for output text file
     """
     with open(output_txt_path, 'w', encoding='utf-8') as file:
-        file.write("CORRECTED SUMMARIZATION RESULTS\n")
+        file.write("TEXT CORRECTION RESULTS\n")
         file.write("=" * 60 + "\n\n")
         
         for _, row in dataframe.iterrows():
             file.write(f"Speaker: {row['speaker']}\n")
-            file.write(f"Original Summary Length: {row['summary_length']} chars\n")
-            file.write(f"Corrected Summary Length: {len(row['corrected_summary'])} chars\n")
-            file.write(f"Compression Ratio: {row['compression_ratio']:.2f}\n")
-            file.write(f"Original Summary: {row['summary']}\n")
-            file.write(f"Corrected Summary: {row['corrected_summary']}\n")
+            file.write(f"Start Time: {row.get('start_time', 0):.2f}s\n")
+            file.write(f"End Time: {row.get('end_time', 0):.2f}s\n")
+            file.write(f"Original Text: {row['text']}\n")
+            file.write(f"Corrected Text: {row['corrected_text']}\n")
             file.write("=" * 60 + "\n\n")
-
-
-def parse_summarization_from_txt(txt_file_path):
-    """Parse summarization results from text file.
-    
-    Args:
-        txt_file_path: Path to summarization text file
-        
-    Returns:
-        DataFrame: Parsed summarization data
-    """
-    data = []
-    
-    with open(txt_file_path, 'r', encoding='utf-8') as file:
-        lines = file.readlines()
-        
-        current_speaker = None
-        current_summary = None
-        current_original_length = None
-        current_summary_length = None
-        current_compression_ratio = None
-        capture_summary = False
-        
-        for line in lines:
-            line = line.strip()
-            
-            if line.startswith("Speaker:"):
-                current_speaker = line.replace("Speaker:", "").strip()
-            elif line.startswith("Original Text Length:"):
-                length_str = line.replace("Original Text Length:", "").replace("chars", "").strip()
-                current_original_length = int(length_str)
-            elif line.startswith("Summary Length:"):
-                length_str = line.replace("Summary Length:", "").replace("chars", "").strip()
-                current_summary_length = int(length_str)
-            elif line.startswith("Compression Ratio:"):
-                ratio_str = line.replace("Compression Ratio:", "").strip()
-                current_compression_ratio = float(ratio_str)
-            elif line.startswith("Summary:"):
-                # We begin capturing the summarization text
-                current_summary = line.replace("Summary:", "").strip()
-                capture_summary = True
-            elif capture_summary:
-                # If this is a continuation of the summary text (not the next section)
-                if line and not line.startswith("=") and not line.startswith("Speaker:"):
-                    current_summary += " " + line
-                else:
-                    # Completed the summation capture
-                    capture_summary = False
-                    
-                    # When all the data was collected
-                    if current_speaker and current_summary:
-                        data.append({
-                            "speaker": current_speaker,
-                            "original_text_length": current_original_length,
-                            "summary_length": current_summary_length,
-                            "compression_ratio": current_compression_ratio,
-                            "summary": current_summary.strip()
-                        })
-                        
-                        # Reset for next segment
-                        current_speaker = None
-                        current_summary = None
-                        current_original_length = None
-                        current_summary_length = None
-                        current_compression_ratio = None
-                    
-                    # If you meet a new speaker, we start over.
-                    if line.startswith("Speaker:"):
-                        current_speaker = line.replace("Speaker:", "").strip()
-    
-    return pd.DataFrame(data)
 
 
 def correct_text(input_text, correction_model, correction_tokenizer):
     """Correct text using the correction model.
+    
+    Handles long texts by splitting into sentence-level chunks to avoid
+    truncation by the M2M100 model.
     
     Args:
         input_text: Text to correct
@@ -112,74 +48,134 @@ def correct_text(input_text, correction_model, correction_tokenizer):
         tuple: (corrected_text, success_status)
     """
     try:
-        # For Russian text correction
-        encodings = correction_tokenizer(input_text, return_tensors="pt")
-        generated_tokens = correction_model.generate(
-            **encodings, 
-            forced_bos_token_id=correction_tokenizer.get_lang_id("ru")
-        )
-        corrected_text = correction_tokenizer.batch_decode(
-            generated_tokens, 
-            skip_special_tokens=True
-        )[0]
-        return corrected_text, True
+        device = get_device()
+        
+        if len(input_text) <= MAX_CHUNK_CHARS:
+            return _correct_chunk(input_text, correction_model, correction_tokenizer, device)
+        
+        sentences = re.split(r'(?<=[.!?])\s+', input_text)
+        
+        chunks = []
+        current_chunk = ""
+        
+        for sentence in sentences:
+            if current_chunk and len(current_chunk) + len(sentence) + 1 > MAX_CHUNK_CHARS:
+                chunks.append(current_chunk.strip())
+                current_chunk = sentence
+            else:
+                current_chunk = (current_chunk + " " + sentence).strip() if current_chunk else sentence
+        
+        if current_chunk.strip():
+            chunks.append(current_chunk.strip())
+        
+        if not chunks:
+            return input_text, False
+        
+        corrected_parts = []
+        for chunk in chunks:
+            corrected_chunk, _ = _correct_chunk(chunk, correction_model, correction_tokenizer, device)
+            corrected_parts.append(corrected_chunk)
+        
+        return " ".join(corrected_parts), True
+        
     except Exception as error:
         print(f"Error correcting text: {error}")
         return input_text, False
 
 
-def perform_correction(input_txt_path, output_txt_path):
-    """Perform text correction on summarization results.
+def _correct_chunk(text, model, tokenizer, device):
+    """Correct a single chunk of text."""
+    encodings = tokenizer(text, return_tensors="pt")
+    encodings = {k: v.to(device) for k, v in encodings.items()}
+    
+    generated_tokens = model.generate(
+        **encodings,
+        forced_bos_token_id=tokenizer.get_lang_id("ru"),
+        max_new_tokens=512
+    )
+    corrected = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)[0]
+    return corrected, True
+
+
+def perform_correction(input_txt_path=None, output_txt_path=None, asr_df=None,
+                       correction_model=None, correction_tokenizer=None,
+                       progress_callback=None):
+    """Perform text correction on ASR transcription results.
     
     Args:
-        input_txt_path: Path to input text file with summarization results
-        output_txt_path: Path for output text file with corrected summaries
+        input_txt_path: Path to input text file with ASR results (CLI mode)
+        output_txt_path: Path for output text file with corrected texts (CLI mode)
+        asr_df: DataFrame with ASR results (bot mode, skips TXT parsing)
+        correction_model: Optional pre-loaded model (for bot mode)
+        correction_tokenizer: Optional pre-loaded tokenizer (for bot mode)
+        progress_callback: Optional callback function for progress updates
         
     Returns:
-        DataFrame: DataFrame with corrected summaries
+        DataFrame: DataFrame with corrected texts (adds 'corrected_text' column)
     """
     start_time = time.time()
     
-    print("Loading correction model...")
-    correction_model, correction_tokenizer = load_correction_model()
+    if correction_model is None or correction_tokenizer is None:
+        print("Loading correction model...")
+        correction_model, correction_tokenizer = load_correction_model()
     
-    # Parse summarization data from text file
-    input_dataframe = parse_summarization_from_txt(input_txt_path)
-    
-    if input_dataframe.empty:
-        print("No summarization data found to correct")
+    if asr_df is not None:
+        input_dataframe = asr_df.copy()
+        print("Using provided ASR DataFrame...")
+    elif input_txt_path:
+        from pipeline.asr import parse_asr_from_txt
+        input_dataframe = parse_asr_from_txt(input_txt_path)
+    else:
+        print("No ASR data provided")
         return pd.DataFrame()
     
-    print(f"Correcting {len(input_dataframe)} speaker summaries...")
+    if input_dataframe.empty:
+        print("No ASR data found to correct")
+        return pd.DataFrame()
     
-    corrected_summaries = []
+    text_column = 'text'
+    if text_column not in input_dataframe.columns:
+        if 'corrected_text' in input_dataframe.columns:
+            text_column = 'corrected_text'
+        else:
+            print(f"No text column found in input data")
+            return pd.DataFrame()
+    
+    print(f"Correcting {len(input_dataframe)} ASR segments...")
+    
+    corrected_texts = []
     
     for index, row in input_dataframe.iterrows():
-        print(f"Correcting summary for {row['speaker']}...")
+        speaker = row['speaker']
+        start_t = row.get('start_time', None)
+        if start_t is not None:
+            print(f"Correcting segment for {speaker} [{start_t:.1f}s]...")
+        else:
+            print(f"Correcting segment for {speaker}...")
         
-        original_summary = row["summary"]
-        corrected_summary, success_status = correct_text(
-            original_summary, 
-            correction_model, 
+        original_text = row[text_column]
+        corrected_text, success = correct_text(
+            original_text,
+            correction_model,
             correction_tokenizer
         )
         
-        corrected_summaries.append(corrected_summary)
+        corrected_texts.append(corrected_text)
         
-        print(f"Original: {original_summary}")
-        print(f"Corrected: {corrected_summary}")
+        print(f"Original:  {original_text[:100]}...")
+        print(f"Corrected: {corrected_text[:100]}...")
         print("---")
     
-    input_dataframe["corrected_summary"] = corrected_summaries
+    input_dataframe["corrected_text"] = corrected_texts
     
-    # Save to text file
-    save_correction_to_txt(input_dataframe, output_txt_path)
+    if output_txt_path:
+        save_correction_to_txt(input_dataframe, output_txt_path)
     
     total_execution_time = time.time() - start_time
-    print(f"Summarization correction completed in {total_execution_time:.2f} seconds")
+    print(f"Text correction completed in {total_execution_time:.2f} seconds")
     
     return input_dataframe
 
 
 if __name__ == "__main__":
-    result_dataframe = perform_correction("summarization.txt", "correction_output.txt")
+    result_dataframe = perform_correction("asr_output.txt", "correction_output.txt")
