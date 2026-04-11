@@ -60,8 +60,6 @@ class SpeechProtocolModel(nn.Module):
             trust_remote_code=True,
         )
 
-        self.llm.resize_token_embeddings(len(self.tokenizer))
-
         if self.config.freeze_llm:
             for param in self.llm.parameters():
                 param.requires_grad = False

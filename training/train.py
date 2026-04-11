@@ -201,7 +201,9 @@ def _log_audio_examples(model, val_loader, device, tokenizer, experiment, stage_
         labels = batch["labels"]
 
         texts = model.generate(input_features, waveforms, max_new_tokens=256)
-        ref_texts = tokenizer.batch_decode(labels, skip_special_tokens=True)
+        clean_labels = labels.clone()
+        clean_labels[clean_labels == -100] = tokenizer.pad_token_id
+        ref_texts = tokenizer.batch_decode(clean_labels, skip_special_tokens=True)
         preds.extend(texts[:n])
         refs.extend(ref_texts[:n])
 
@@ -373,7 +375,9 @@ def _log_text_examples(llm, tokenizer, val_loader, device, experiment, step, n=3
         gen_texts = tokenizer.batch_decode(
             generated[:, input_ids.shape[1]:], skip_special_tokens=True
         )
-        ref_texts = tokenizer.batch_decode(labels, skip_special_tokens=True)
+        clean_labels = labels.clone()
+        clean_labels[clean_labels == -100] = tokenizer.pad_token_id
+        ref_texts = tokenizer.batch_decode(clean_labels, skip_special_tokens=True)
         preds.extend(gen_texts[:n])
         refs.extend(ref_texts[:n])
 
@@ -445,11 +449,15 @@ def train_text_stage(
             attention_mask = batch["attention_mask"].to(device)
             labels = batch["labels"].to(device)
 
-            combined_ids = torch.cat([input_ids, labels], dim=1)
+            labels_as_input = labels.clone()
+            label_pad_mask = labels_as_input == -100
+            labels_as_input[label_pad_mask] = tokenizer.pad_token_id
+
+            combined_ids = torch.cat([input_ids, labels_as_input], dim=1)
             ignore_input = torch.full_like(input_ids, -100)
             combined_labels = torch.cat([ignore_input, labels], dim=1)
             combined_mask = torch.cat(
-                [attention_mask, torch.ones_like(labels)], dim=1
+                [attention_mask, (~label_pad_mask).long()], dim=1
             )
 
             with torch.amp.autocast("cuda", enabled=use_fp16):
@@ -501,7 +509,7 @@ def train_text_stage(
                     )
 
                 if global_step % eval_every == 0:
-                    val_loss = evaluate_text(llm, val_loader, device, use_fp16)
+                    val_loss = evaluate_text(llm, val_loader, device, use_fp16, tokenizer)
                     print(f"[Stage 1.5] Step {global_step}, Val Loss: {val_loss:.4f}")
                     if experiment:
                         experiment.log_metric("stage1_5/val_loss", val_loss, step=global_step)
@@ -516,7 +524,7 @@ def train_text_stage(
         avg_loss = epoch_loss / max(num_batches, 1)
         print(f"[Stage 1.5] Epoch {epoch+1} complete. Avg Loss: {avg_loss:.4f}")
 
-        val_loss = evaluate_text(llm, val_loader, device, use_fp16)
+        val_loss = evaluate_text(llm, val_loader, device, use_fp16, tokenizer)
         print(f"[Stage 1.5] Epoch Val Loss: {val_loss:.4f}")
         if experiment:
             experiment.log_metric("stage1_5/val_loss", val_loss, epoch=epoch + 1)
@@ -559,21 +567,26 @@ def evaluate_audio(model, val_loader, device, use_fp16: bool) -> float:
 
 
 @torch.no_grad()
-def evaluate_text(llm, val_loader, device, use_fp16: bool) -> float:
+def evaluate_text(llm, val_loader, device, use_fp16: bool, tokenizer=None) -> float:
     llm.eval()
     total_loss = 0.0
     count = 0
+    pad_id = tokenizer.pad_token_id if tokenizer is not None else 0
 
     for batch in val_loader:
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         labels = batch["labels"].to(device)
 
-        combined_ids = torch.cat([input_ids, labels], dim=1)
+        labels_as_input = labels.clone()
+        label_pad_mask = labels_as_input == -100
+        labels_as_input[label_pad_mask] = pad_id
+
+        combined_ids = torch.cat([input_ids, labels_as_input], dim=1)
         ignore_input = torch.full_like(input_ids, -100)
         combined_labels = torch.cat([ignore_input, labels], dim=1)
         combined_mask = torch.cat(
-            [attention_mask, torch.ones_like(labels)], dim=1
+            [attention_mask, (~label_pad_mask).long()], dim=1
         )
 
         with torch.amp.autocast("cuda", enabled=use_fp16):
