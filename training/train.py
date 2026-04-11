@@ -24,6 +24,30 @@ from transformers import AutoTokenizer, WhisperFeatureExtractor
 load_dotenv()
 
 
+def _compute_rouge_scores(predictions: list[str], references: list[str]) -> dict:
+    """Compute ROUGE-1/2/L on a small set of examples."""
+    try:
+        from rouge_score import rouge_scorer
+        scorer = rouge_scorer.RougeScorer(["rouge1", "rouge2", "rougeL"], use_stemmer=False)
+        scores = {"rouge1": [], "rouge2": [], "rougeL": []}
+        for pred, ref in zip(predictions, references):
+            result = scorer.score(ref, pred)
+            for key in scores:
+                scores[key].append(result[key].fmeasure)
+        return {k: sum(v) / max(len(v), 1) for k, v in scores.items()}
+    except ImportError:
+        return {}
+
+
+def _grad_norm(params) -> float:
+    """Total L2 gradient norm across all parameters."""
+    total = 0.0
+    for p in params:
+        if p.grad is not None:
+            total += p.grad.data.norm(2).item() ** 2
+    return total ** 0.5
+
+
 def get_experiment():
     """Create CometML experiment."""
     try:
@@ -90,9 +114,9 @@ def build_asr_dataset(config: dict, tokenizer, feature_extractor):
     print(f"Loading ASR dataset: {ds_name} / {subset}")
 
     if subset:
-        raw = load_dataset(ds_name, subset, split="train", trust_remote_code=True)
+        raw = load_dataset(ds_name, subset, split="train")
     else:
-        raw = load_dataset(ds_name, split="train", trust_remote_code=True)
+        raw = load_dataset(ds_name, split="train")
 
     max_samples = sc.get("max_samples")
     if max_samples and len(raw) > max_samples:
@@ -121,7 +145,7 @@ def build_summarization_dataset(config: dict, tokenizer):
     ds_name = sc["dataset"]
 
     print(f"Loading summarization dataset: {ds_name}")
-    raw = load_dataset(ds_name, split="train", trust_remote_code=True)
+    raw = load_dataset(ds_name, split="train")
 
     max_samples = sc.get("max_samples")
     if max_samples and len(raw) > max_samples:
@@ -165,6 +189,39 @@ def build_protocol_dataset(config: dict, tokenizer, feature_extractor):
     return train_ds, val_ds
 
 
+def _log_audio_examples(model, val_loader, device, tokenizer, experiment, stage_name, step, n=3):
+    """Generate text on a few validation samples and log predicted vs reference."""
+    model.eval()
+    preds, refs = [], []
+    for i, batch in enumerate(val_loader):
+        if i >= 1:
+            break
+        input_features = batch["input_features"].to(device)
+        waveforms = [w.to(device) for w in batch["waveforms"]]
+        labels = batch["labels"]
+
+        texts = model.generate(input_features, waveforms, max_new_tokens=256)
+        ref_texts = tokenizer.batch_decode(labels, skip_special_tokens=True)
+        preds.extend(texts[:n])
+        refs.extend(ref_texts[:n])
+
+    preds = preds[:n]
+    refs = refs[:n]
+
+    if experiment and preds:
+        rouge = _compute_rouge_scores(preds, refs)
+        for k, v in rouge.items():
+            experiment.log_metric(f"{stage_name}/{k}", v, step=step)
+
+        for i, (p, r) in enumerate(zip(preds, refs)):
+            experiment.log_text(
+                f"[Step {step}] Sample {i}\n--- PREDICTED ---\n{p}\n--- REFERENCE ---\n{r}",
+                step=step,
+                metadata={"sample_idx": i, "stage": stage_name},
+            )
+    model.train()
+
+
 def train_audio_stage(
     model,
     train_loader,
@@ -202,6 +259,10 @@ def train_audio_stage(
     global_step = 0
     best_val_loss = float("inf")
 
+    if experiment:
+        experiment.log_metric(f"{stage_name}/train_samples", len(train_loader.dataset))
+        experiment.log_metric(f"{stage_name}/val_samples", len(val_loader.dataset))
+
     for epoch in range(stage_config["epochs"]):
         model.train()
         epoch_loss = 0.0
@@ -230,11 +291,11 @@ def train_audio_stage(
             if (batch_idx + 1) % grad_accum == 0:
                 if scaler is not None:
                     scaler.unscale_(optimizer)
-                    torch.nn.utils.clip_grad_norm_(trainable_params, 1.0)
+                    gn = torch.nn.utils.clip_grad_norm_(trainable_params, 1.0).item()
                     scaler.step(optimizer)
                     scaler.update()
                 else:
-                    torch.nn.utils.clip_grad_norm_(trainable_params, 1.0)
+                    gn = torch.nn.utils.clip_grad_norm_(trainable_params, 1.0).item()
                     optimizer.step()
 
                 if global_step >= warmup_steps:
@@ -254,11 +315,13 @@ def train_audio_stage(
                 if experiment:
                     experiment.log_metric(f"{stage_name}/train_loss", actual_loss, step=global_step)
                     experiment.log_metric(f"{stage_name}/lr", optimizer.param_groups[0]["lr"], step=global_step)
+                    experiment.log_metric(f"{stage_name}/grad_norm", gn, step=global_step)
 
                 if global_step % 50 == 0:
                     print(
                         f"[{stage_name}] Epoch {epoch+1}, Step {global_step}, "
-                        f"Loss: {actual_loss:.4f}, LR: {optimizer.param_groups[0]['lr']:.2e}"
+                        f"Loss: {actual_loss:.4f}, GradNorm: {gn:.4f}, "
+                        f"LR: {optimizer.param_groups[0]['lr']:.2e}"
                     )
 
                 if global_step % eval_every == 0:
@@ -266,6 +329,10 @@ def train_audio_stage(
                     print(f"[{stage_name}] Step {global_step}, Val Loss: {val_loss:.4f}")
                     if experiment:
                         experiment.log_metric(f"{stage_name}/val_loss", val_loss, step=global_step)
+                    _log_audio_examples(
+                        model, val_loader, device, model.tokenizer,
+                        experiment, stage_name, global_step,
+                    )
                     if val_loss < best_val_loss:
                         best_val_loss = val_loss
                         save_checkpoint(model, optimizer, global_step, output_dir / "best")
@@ -283,6 +350,50 @@ def train_audio_stage(
     return model
 
 
+def _log_text_examples(llm, tokenizer, val_loader, device, experiment, step, n=3):
+    """Generate summaries on a few validation samples and log predicted vs reference."""
+    llm.eval()
+    preds, refs = [], []
+    for i, batch in enumerate(val_loader):
+        if i >= 1:
+            break
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+        labels = batch["labels"]
+
+        with torch.amp.autocast("cuda"):
+            generated = llm.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                max_new_tokens=256,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+            )
+
+        gen_texts = tokenizer.batch_decode(
+            generated[:, input_ids.shape[1]:], skip_special_tokens=True
+        )
+        ref_texts = tokenizer.batch_decode(labels, skip_special_tokens=True)
+        preds.extend(gen_texts[:n])
+        refs.extend(ref_texts[:n])
+
+    preds = preds[:n]
+    refs = refs[:n]
+
+    if experiment and preds:
+        rouge = _compute_rouge_scores(preds, refs)
+        for k, v in rouge.items():
+            experiment.log_metric(f"stage1_5/{k}", v, step=step)
+
+        for i, (p, r) in enumerate(zip(preds, refs)):
+            experiment.log_text(
+                f"[Step {step}] Sample {i}\n--- PREDICTED ---\n{p}\n--- REFERENCE ---\n{r}",
+                step=step,
+                metadata={"sample_idx": i, "stage": "stage1_5"},
+            )
+    llm.train()
+
+
 def train_text_stage(
     model,
     train_loader,
@@ -295,6 +406,7 @@ def train_text_stage(
     device = torch.device(config["hardware"]["device"])
 
     llm = model.llm.to(device)
+    tokenizer = model.tokenizer
     trainable_params = [p for p in llm.parameters() if p.requires_grad]
 
     optimizer = AdamW(
@@ -314,8 +426,14 @@ def train_text_stage(
     output_dir = Path(config["checkpointing"]["output_dir"]) / "stage1_5"
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    eval_every = config["checkpointing"].get("eval_every_n_steps", 250)
+
     global_step = 0
     best_val_loss = float("inf")
+
+    if experiment:
+        experiment.log_metric("stage1_5/train_samples", len(train_loader.dataset))
+        experiment.log_metric("stage1_5/val_samples", len(val_loader.dataset))
 
     for epoch in range(stage_config["epochs"]):
         llm.train()
@@ -350,11 +468,11 @@ def train_text_stage(
             if (batch_idx + 1) % grad_accum == 0:
                 if scaler is not None:
                     scaler.unscale_(optimizer)
-                    torch.nn.utils.clip_grad_norm_(trainable_params, 1.0)
+                    gn = torch.nn.utils.clip_grad_norm_(trainable_params, 1.0).item()
                     scaler.step(optimizer)
                     scaler.update()
                 else:
-                    torch.nn.utils.clip_grad_norm_(trainable_params, 1.0)
+                    gn = torch.nn.utils.clip_grad_norm_(trainable_params, 1.0).item()
                     optimizer.step()
 
                 if global_step >= warmup_steps:
@@ -373,21 +491,39 @@ def train_text_stage(
 
                 if experiment:
                     experiment.log_metric("stage1_5/train_loss", actual_loss, step=global_step)
+                    experiment.log_metric("stage1_5/lr", optimizer.param_groups[0]["lr"], step=global_step)
+                    experiment.log_metric("stage1_5/grad_norm", gn, step=global_step)
 
                 if global_step % 50 == 0:
                     print(
                         f"[Stage 1.5] Epoch {epoch+1}, Step {global_step}, "
-                        f"Loss: {actual_loss:.4f}"
+                        f"Loss: {actual_loss:.4f}, GradNorm: {gn:.4f}"
                     )
+
+                if global_step % eval_every == 0:
+                    val_loss = evaluate_text(llm, val_loader, device, use_fp16)
+                    print(f"[Stage 1.5] Step {global_step}, Val Loss: {val_loss:.4f}")
+                    if experiment:
+                        experiment.log_metric("stage1_5/val_loss", val_loss, step=global_step)
+                    _log_text_examples(
+                        llm, tokenizer, val_loader, device, experiment, global_step,
+                    )
+                    if val_loss < best_val_loss:
+                        best_val_loss = val_loss
+                        llm.save_pretrained(str(output_dir / "best_lora"))
+                    llm.train()
 
         avg_loss = epoch_loss / max(num_batches, 1)
         print(f"[Stage 1.5] Epoch {epoch+1} complete. Avg Loss: {avg_loss:.4f}")
 
         val_loss = evaluate_text(llm, val_loader, device, use_fp16)
-        print(f"[Stage 1.5] Val Loss: {val_loss:.4f}")
+        print(f"[Stage 1.5] Epoch Val Loss: {val_loss:.4f}")
         if experiment:
             experiment.log_metric("stage1_5/val_loss", val_loss, epoch=epoch + 1)
             experiment.log_metric("stage1_5/epoch_loss", avg_loss, epoch=epoch + 1)
+        _log_text_examples(
+            llm, tokenizer, val_loader, device, experiment, global_step,
+        )
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
