@@ -31,8 +31,8 @@ stage1_5:
   max_samples: 50000
   epochs: 2
   lr: 2.0e-5
-  batch_size: 8
-  gradient_accumulation_steps: 4
+  batch_size: 2
+  gradient_accumulation_steps: 16
   warmup_ratio: 0.05
   weight_decay: 0.01
   max_input_len: 1024
