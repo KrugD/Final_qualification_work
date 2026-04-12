@@ -143,7 +143,9 @@ class SpeechProtocolModel(nn.Module):
         audio_embeds = audio_tokens.to(self.llm.dtype)
 
         if labels is not None:
-            label_embeds = self.llm.get_input_embeddings()(labels)
+            labels_for_embed = labels.clone()
+            labels_for_embed[labels_for_embed == -100] = self.tokenizer.pad_token_id
+            label_embeds = self.llm.get_input_embeddings()(labels_for_embed)
             inputs_embeds = torch.cat([audio_embeds, label_embeds], dim=1)
 
             audio_len = audio_embeds.shape[1]
