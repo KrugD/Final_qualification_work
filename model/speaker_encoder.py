@@ -76,8 +76,8 @@ class SpeakerEncoder(nn.Module):
         Returns:
             (n_windows, 192) speaker embeddings.
         """
-        device = waveform.device
-        windows = self._extract_windows(waveform)
-        windows = windows.to(device)
+        model_device = next(self.classifier.mods.parameters()).device
+        windows = self._extract_windows(waveform).to(model_device).float()
+        self.classifier.device = model_device
         embeddings = self.classifier.encode_batch(windows)
         return embeddings.squeeze(1)
