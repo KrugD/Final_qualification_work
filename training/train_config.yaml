@@ -11,9 +11,9 @@ model:
 
 stage1:
   description: "Audio-text alignment (ASR)"
-  dataset: "fsicoli/common_voice_16_0"
-  dataset_subset: "ru"
-  max_samples: 100000
+  dataset: "bond005/sberdevices_golos_100h_farfield"
+  dataset_subset: ~
+  max_samples: 10000
   epochs: 3
   lr: 1.0e-4
   batch_size: 2
