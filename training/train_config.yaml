@@ -11,13 +11,13 @@ model:
 
 stage1:
   description: "Audio-text alignment (ASR)"
-  dataset: "SberDevices/Golos"
-  dataset_subset: "farfield"
+  dataset: "mozilla-foundation/common_voice_16_0"
+  dataset_subset: "ru"
   max_samples: 100000
   epochs: 3
   lr: 1.0e-4
-  batch_size: 4
-  gradient_accumulation_steps: 8
+  batch_size: 2
+  gradient_accumulation_steps: 16
   warmup_ratio: 0.05
   weight_decay: 0.01
   max_audio_sec: 30

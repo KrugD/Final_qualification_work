@@ -114,9 +114,9 @@ def build_asr_dataset(config: dict, tokenizer, feature_extractor):
     print(f"Loading ASR dataset: {ds_name} / {subset}")
 
     if subset:
-        raw = load_dataset(ds_name, subset, split="train", trust_remote_code=True)
+        raw = load_dataset(ds_name, subset, split="train")
     else:
-        raw = load_dataset(ds_name, split="train", trust_remote_code=True)
+        raw = load_dataset(ds_name, split="train")
 
     max_samples = sc.get("max_samples")
     if max_samples and len(raw) > max_samples:
