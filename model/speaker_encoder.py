@@ -66,6 +66,12 @@ class SpeakerEncoder(nn.Module):
 
         return torch.stack(windows)
 
+    def train(self, mode: bool = True):
+        """Keep classifier in eval mode (frozen BatchNorm needs it)."""
+        super().train(mode)
+        self.classifier.eval()
+        return self
+
     @torch.no_grad()
     def forward(self, waveform: torch.Tensor) -> torch.Tensor:
         """Compute speaker embeddings for each window.
@@ -76,6 +82,7 @@ class SpeakerEncoder(nn.Module):
         Returns:
             (n_windows, 192) speaker embeddings.
         """
+        self.classifier.eval()
         model_device = next(self.classifier.mods.parameters()).device
         windows = self._extract_windows(waveform).to(model_device).float()
         self.classifier.device = model_device
