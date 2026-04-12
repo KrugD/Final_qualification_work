@@ -114,9 +114,9 @@ def build_asr_dataset(config: dict, tokenizer, feature_extractor):
     print(f"Loading ASR dataset: {ds_name} / {subset}")
 
     if subset:
-        raw = load_dataset(ds_name, subset, split="train")
+        raw = load_dataset(ds_name, subset, split="train", trust_remote_code=True)
     else:
-        raw = load_dataset(ds_name, split="train")
+        raw = load_dataset(ds_name, split="train", trust_remote_code=True)
 
     max_samples = sc.get("max_samples")
     if max_samples and len(raw) > max_samples:
@@ -653,6 +653,26 @@ def main():
                     model.llm.base_model.model, str(lora_path)
                 )
                 print(f"Loaded LoRA from {lora_path}")
+        elif args.stage == "2":
+            ckpt_root = Path(config["checkpointing"]["output_dir"])
+            s1_adapter = ckpt_root / "stage1" / "final" / "adapter.pt"
+            if s1_adapter.exists():
+                model.fusion_adapter.load_state_dict(
+                    torch.load(s1_adapter, weights_only=True)
+                )
+                print(f"Auto-loaded Stage 1 adapter from {s1_adapter}")
+            else:
+                print(f"WARNING: Stage 1 adapter not found at {s1_adapter}")
+
+            s15_lora = ckpt_root / "stage1_5" / "final_lora"
+            if s15_lora.exists():
+                from peft import PeftModel
+                model.llm = PeftModel.from_pretrained(
+                    model.llm.base_model.model, str(s15_lora)
+                )
+                print(f"Auto-loaded Stage 1.5 LoRA from {s15_lora}")
+            else:
+                print(f"WARNING: Stage 1.5 LoRA not found at {s15_lora}")
 
         tokenizer = model.tokenizer
         feature_extractor = model.audio_encoder.feature_extractor
