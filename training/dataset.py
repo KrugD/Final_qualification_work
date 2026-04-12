@@ -7,12 +7,14 @@ Stage 2   – Protocol gen:   (audio, protocol_text)
 
 from __future__ import annotations
 
+import io
 import json
 import os
 from pathlib import Path
 
 import librosa
 import numpy as np
+import soundfile as sf
 import torch
 from torch.utils.data import Dataset
 from transformers import WhisperFeatureExtractor
@@ -50,8 +52,14 @@ class ASRDataset(Dataset):
     def __getitem__(self, idx: int) -> dict:
         item = self.dataset[idx]
 
-        audio = item["audio"]["array"]
-        sr = item["audio"]["sampling_rate"]
+        audio_data = item["audio"]
+        if "array" in audio_data and audio_data["array"] is not None:
+            audio = audio_data["array"]
+            sr = audio_data["sampling_rate"]
+        else:
+            audio_bytes = audio_data.get("bytes") or open(audio_data["path"], "rb").read()
+            audio, sr = sf.read(io.BytesIO(audio_bytes))
+
         if sr != self.sample_rate:
             audio = librosa.resample(audio, orig_sr=sr, target_sr=self.sample_rate)
 

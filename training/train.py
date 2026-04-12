@@ -104,7 +104,7 @@ def build_model(config: dict, stage: str):
 
 
 def build_asr_dataset(config: dict, tokenizer, feature_extractor):
-    from datasets import load_dataset
+    from datasets import Audio, load_dataset
     from training.dataset import ASRDataset
 
     sc = config["stage1"]
@@ -117,6 +117,9 @@ def build_asr_dataset(config: dict, tokenizer, feature_extractor):
         raw = load_dataset(ds_name, subset, split="train")
     else:
         raw = load_dataset(ds_name, split="train")
+
+    if "audio" in raw.column_names:
+        raw = raw.cast_column("audio", Audio(decode=False))
 
     max_samples = sc.get("max_samples")
     if max_samples and len(raw) > max_samples:
