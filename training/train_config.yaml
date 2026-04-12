@@ -11,7 +11,7 @@ model:
 
 stage1:
   description: "Audio-text alignment (ASR)"
-  dataset: "mozilla-foundation/common_voice_16_0"
+  dataset: "fsicoli/common_voice_16_0"
   dataset_subset: "ru"
   max_samples: 100000
   epochs: 3

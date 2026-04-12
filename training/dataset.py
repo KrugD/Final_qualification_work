@@ -75,7 +75,7 @@ class ASRDataset(Dataset):
 
         waveform = torch.from_numpy(audio).float()
 
-        text = item.get("sentence") or item.get("text") or ""
+        text = item.get("sentence") or item.get("transcription") or item.get("text") or ""
         tokens = self.tokenizer(
             text,
             return_tensors="pt",
