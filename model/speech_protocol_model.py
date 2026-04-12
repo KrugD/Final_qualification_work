@@ -100,7 +100,8 @@ class SpeechProtocolModel(nn.Module):
 
         speaker_embs = []
         for waveform in waveforms:
-            emb = self.speaker_encoder(waveform)
+            with torch.amp.autocast("cuda", enabled=False):
+                emb = self.speaker_encoder(waveform.float())
             speaker_embs.append(emb)
 
         max_windows = max(e.shape[0] for e in speaker_embs)
