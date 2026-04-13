@@ -42,7 +42,7 @@ stage1_5:
 stage2:
   description: "Protocol generation (adapter + LoRA)"
   data_path: "data/protocols"
-  epochs: 15
+  epochs: 30
   lr: 5.0e-5
   batch_size: 2
   gradient_accumulation_steps: 16
@@ -55,7 +55,7 @@ stage2:
 checkpointing:
   output_dir: "checkpoints"
   save_every_n_steps: 500
-  eval_every_n_steps: 250
+  eval_every_n_steps: 50
   gradient_checkpointing: true
 
 hardware:
