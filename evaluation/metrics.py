@@ -56,15 +56,13 @@ def compute_rouge(predictions: list[str], references: list[str]) -> dict:
 def compute_bert_score(
     predictions: list[str],
     references: list[str],
-    model_name: str = "ai-forever/ruBert-base",
 ) -> float:
-    """Compute BERTScore F1 using a Russian BERT model."""
+    """Compute BERTScore F1 using multilingual BERT."""
     from bert_score import score
 
     _, _, f1 = score(
         predictions,
         references,
-        model_type=model_name,
         lang="ru",
         verbose=False,
     )
